@@ -1,0 +1,30 @@
+# ===== Flutter 관련 =====
+.dart_tool/
+.packages
+.flutter-plugins
+build/
+ios/Pods/
+android/.gradle/
+.idea/
+.vscode/
+pubspec.lock
+
+# ===== Java / Spring 관련 =====
+*.class
+target/
+*.jar
+*.war
+*.iml
+*.log
+.env
+out/
+.gradle/
+build/
+
+# IDE
+*.swp
+*.bak
+*.tmp
+*.DS_Store
+
+chore: add .gitignore for Flutter and Spring
