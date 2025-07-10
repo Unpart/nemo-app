@@ -19,7 +19,6 @@ target/
 .env
 out/
 .gradle/
-build/
 
 # IDE
 *.swp
