@@ -1,8 +1,8 @@
 // lib/presentation/screens/login/auth_view_model.dart
 
 import 'package:flutter/material.dart';
-import '../../../services/auth_service.dart';
 import 'signup_form_model.dart';
+import 'package:frontend/services/auth_service.dart';
 
 class AuthViewModel extends ChangeNotifier {
   // 회원가입용 폼 데이터

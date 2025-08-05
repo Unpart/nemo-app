@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'presentation/screens/login/login_screen.dart';
-import 'provider/provider.dart'; // ✅ 이거만 import하면 됨
+import 'providers/provider.dart'; // ✅ 이거만 import하면 됨
 
 void main() {
   runApp(const NemoApp());
