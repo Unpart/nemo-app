@@ -75,7 +75,7 @@ public class AuthService {
     @Transactional
     public void deleteAccount(Long userId) {
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHORIZED));
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_ALREADY_DELETED));
         refreshTokenRepository.deleteByUserId(userId);
         userRepository.delete(user);
     }

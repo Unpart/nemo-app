@@ -3,6 +3,7 @@ package com.nemo.backend.domain.user.controller;
 import com.nemo.backend.domain.auth.jwt.JwtTokenProvider;
 import com.nemo.backend.domain.auth.service.AuthService;
 import com.nemo.backend.domain.user.dto.UpdateUserRequest;
+import com.nemo.backend.domain.user.dto.UserProfileResponse;
 import com.nemo.backend.domain.user.entity.User;
 import com.nemo.backend.domain.user.service.UserService;
 import com.nemo.backend.global.exception.ApiException;
@@ -15,8 +16,6 @@ import java.util.Collections;
 
 /**
  * Controller for retrieving, updating and deleting the current user's profile.
- * Authentication is performed using a JWT access token in the Authorization
- * header.
  */
 @RestController
 @RequestMapping("/api/users")
@@ -32,17 +31,35 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<User> me(HttpServletRequest request) {
+    public ResponseEntity<UserProfileResponse> me(HttpServletRequest request) {
         Long userId = extractUserId(request);
         User user = userService.getProfile(userId);
-        return ResponseEntity.ok(user);
+        UserProfileResponse response = new UserProfileResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getNickname(),
+                user.getProfileImageUrl(),
+                user.getProvider(),
+                user.getSocialId(),
+                user.getCreatedAt()
+        );
+        return ResponseEntity.ok(response);
     }
 
     @PatchMapping("/me")
-    public ResponseEntity<User> updateMe(HttpServletRequest request, @RequestBody UpdateUserRequest body) {
+    public ResponseEntity<UserProfileResponse> updateMe(HttpServletRequest request, @RequestBody UpdateUserRequest body) {
         Long userId = extractUserId(request);
         User updated = userService.updateProfile(userId, body);
-        return ResponseEntity.ok(updated);
+        UserProfileResponse response = new UserProfileResponse(
+                updated.getId(),
+                updated.getEmail(),
+                updated.getNickname(),
+                updated.getProfileImageUrl(),
+                updated.getProvider(),
+                updated.getSocialId(),
+                updated.getCreatedAt()
+        );
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/me")
