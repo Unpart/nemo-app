@@ -13,10 +13,11 @@ import java.util.Map;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
     @ExceptionHandler(ApiException.class)
-    public ResponseEntity<Map<String, String>> handleApiException(ApiException ex) {
+    public ResponseEntity<Map<String, Object>> handleApiException(ApiException ex) {
         ErrorCode code = ex.getErrorCode();
-        Map<String, String> body = new HashMap<>();
+        Map<String, Object> body = new HashMap<>();
         body.put("error", code.getCode());
         body.put("message", code.getMessage());
         return ResponseEntity.status(code.getStatus()).body(body);

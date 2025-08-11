@@ -23,12 +23,15 @@ public class UserService {
 
     @Transactional(readOnly = true)
     public User getProfile(Long userId) {
-        return userRepository.findById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHORIZED));
+        // 탈퇴된 사용자는 USER_ALREADY_DELETED 오류로 처리
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_ALREADY_DELETED));
     }
 
     @Transactional
     public User updateProfile(Long userId, UpdateUserRequest request) {
-        User user = userRepository.findById(userId).orElseThrow(() -> new ApiException(ErrorCode.UNAUTHORIZED));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiException(ErrorCode.USER_ALREADY_DELETED));
         if (request.getNickname() != null && !request.getNickname().isEmpty()) {
             user.setNickname(request.getNickname());
         }

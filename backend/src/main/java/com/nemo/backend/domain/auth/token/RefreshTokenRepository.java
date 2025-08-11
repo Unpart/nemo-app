@@ -6,9 +6,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 /**
- * Repository for {@link RefreshToken} persistence.  Placed directly in the
- * token package since the auth domain does not define a dedicated
- * repository folder.
+ * Repository for {@link RefreshToken} persistence.
  */
 @Repository
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {

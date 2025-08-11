@@ -7,8 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 /**
- * Repository for {@link User} persistence.  Placed in the user domain's
- * repository package according to the project structure.
+ * Repository for {@link User} persistence.
  */
 @Repository
 public interface UserRepository extends JpaRepository<User, Long> {
