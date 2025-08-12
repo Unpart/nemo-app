@@ -1,5 +1,6 @@
 // 📁 lib/presentation/screens/login/signup_screen.dart
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/app/theme/app_colors.dart';
@@ -23,7 +24,24 @@ class SignupScreen extends StatelessWidget {
                 ),
                 child: Column(
                   children: [
-                    _Logo(),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.easeOutCubic,
+                      child: _Logo(),
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: Transform.translate(
+                            offset: Offset(0, (1 - value) * 16),
+                            child: Transform.scale(
+                              scale: 0.95 + 0.05 * value,
+                              child: child,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                     const SizedBox(height: 10),
                     Text(
                       '',
@@ -33,52 +51,49 @@ class SignupScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _GlassCard(
-                      child: Column(
-                        children: [
-                          _IconInputField(
-                            hintText: '아이디/이메일 입력',
-                            keyboardType: TextInputType.emailAddress,
-                            icon: Icons.email_outlined,
-                          ),
-                          const SizedBox(height: 12),
-                          _IconInputField(
-                            hintText: '비밀번호 입력',
-                            obscureText: true,
-                            icon: Icons.lock_outline,
-                          ),
-                          const SizedBox(height: 12),
-                          _IconInputField(
-                            hintText: '비밀번호 확인',
-                            obscureText: true,
-                            icon: Icons.lock_reset,
-                          ),
-                          const SizedBox(height: 16),
-                          _PrimaryButton(
-                            text: '회원가입',
-                            onTap: () {
-                              // TODO: 회원가입 로직
-                            },
-                          ),
-                        ],
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.easeOutCubic,
+                      child: _GlassCard(
+                        child: Column(
+                          children: [
+                            _IconInputField(
+                              hintText: '아이디/이메일 입력',
+                              keyboardType: TextInputType.emailAddress,
+                              icon: Icons.email_outlined,
+                            ),
+                            const SizedBox(height: 12),
+                            _IconInputField(
+                              hintText: '비밀번호 입력',
+                              obscureText: true,
+                              icon: Icons.lock_outline,
+                            ),
+                            const SizedBox(height: 12),
+                            _IconInputField(
+                              hintText: '비밀번호 확인',
+                              obscureText: true,
+                              icon: Icons.lock_reset,
+                            ),
+                            const SizedBox(height: 16),
+                            _PrimaryButton(
+                              text: '회원가입',
+                              onTap: () {
+                                // TODO: 회원가입 로직
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 18),
-                    _SocialButton(
-                      label: '카카오로 시작하기',
-                      backgroundColor: const Color(0xFFFFE812),
-                      foregroundColor: Colors.black,
-                      iconAsset:
-                          'lib/presentation/screens/login/assets/kakao_icon.png',
-                    ),
-                    const SizedBox(height: 12),
-                    _SocialButton(
-                      label: 'Google로 시작하기',
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      iconAsset:
-                          'lib/presentation/screens/login/assets/google_icon.png',
-                      outlined: true,
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: Transform.translate(
+                            offset: Offset(0, (1 - value) * 10),
+                            child: child,
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 18),
                     TextButton(
@@ -150,28 +165,21 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.35),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 12,
-                offset: Offset(0, 8),
-              ),
-            ],
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 12,
+            offset: Offset(0, 8),
           ),
-          child: child,
-        ),
+        ],
       ),
+      child: child,
     );
   }
 }
@@ -226,11 +234,11 @@ class _IconInputFieldState extends State<_IconInputField> {
         hintText: isFocused ? '' : widget.hintText,
         hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.9)),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.28),
+        fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.5)),
+          borderSide: const BorderSide(color: AppColors.divider, width: 1),
         ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -286,76 +294,82 @@ class _PrimaryButton extends StatelessWidget {
   }
 }
 
-class _SocialButton extends StatelessWidget {
-  final String label;
-  final String iconAsset;
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final bool outlined;
-
-  const _SocialButton({
-    required this.label,
-    required this.iconAsset,
-    required this.backgroundColor,
-    required this.foregroundColor,
-    this.outlined = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.zero,
-      decoration: BoxDecoration(
-        color: outlined ? Colors.transparent : backgroundColor,
-        borderRadius: BorderRadius.circular(16),
-        border: outlined ? Border.all(color: AppColors.divider) : null,
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 8)),
-        ],
-      ),
-      child: ListTile(
-        leading: Image.asset(iconAsset, width: 24, height: 24),
-        title: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(color: foregroundColor, fontWeight: FontWeight.w600),
-        ),
-        onTap: () {
-          // TODO: 소셜 로그인 연동
-        },
-      ),
-    );
-  }
-}
+// _SocialButton 제거됨 (소셜 로그인 버튼 미사용)
 
 class _SkyBackground extends StatelessWidget {
   const _SkyBackground();
 
   @override
   Widget build(BuildContext context) {
+    return _SkyBackgroundAnimated();
+  }
+}
+
+class _SkyBackgroundAnimated extends StatefulWidget {
+  @override
+  State<_SkyBackgroundAnimated> createState() => _SkyBackgroundAnimatedState();
+}
+
+class _SkyBackgroundAnimatedState extends State<_SkyBackgroundAnimated>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Positioned.fill(
-      child: Stack(
-        children: [
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [AppColors.skyLight, AppColors.skyMid],
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final t = _controller.value * 2 * math.pi;
+          final dx1 = 6 * math.sin(t);
+          final dy1 = 4 * math.cos(t);
+          final dx2 = 8 * math.cos(t * 0.8);
+          final dy2 = 5 * math.sin(t * 0.8);
+          return Stack(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [AppColors.skyLight, AppColors.skyMid],
+                  ),
+                ),
               ),
-            ),
-          ),
-          Positioned(
-            top: -40,
-            right: -20,
-            child: _Blob(size: 160, color: AppColors.accent.withOpacity(0.35)),
-          ),
-          Positioned(
-            bottom: -50,
-            left: -20,
-            child: _Blob(size: 200, color: AppColors.skyDeep.withOpacity(0.25)),
-          ),
-        ],
+              Positioned(
+                top: -40 + dy1,
+                right: -20 + dx1,
+                child: Opacity(
+                  opacity: 0.35,
+                  child: _Blob(size: 160, color: AppColors.accent),
+                ),
+              ),
+              Positioned(
+                bottom: -50 + dy2,
+                left: -20 + dx2,
+                child: Opacity(
+                  opacity: 0.25,
+                  child: _Blob(size: 200, color: AppColors.skyDeep),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

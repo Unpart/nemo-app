@@ -1,5 +1,6 @@
 // 📁 lib/presentation/screens/login/login_screen.dart
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/app/theme/app_colors.dart';
@@ -24,7 +25,24 @@ class LoginScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _Logo(),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      duration: const Duration(milliseconds: 600),
+                      curve: Curves.easeOutCubic,
+                      child: _Logo(),
+                      builder: (context, value, child) {
+                        return Opacity(
+                          opacity: value,
+                          child: Transform.translate(
+                            offset: Offset(0, (1 - value) * 16),
+                            child: Transform.scale(
+                              scale: 0.95 + 0.05 * value,
+                              child: child,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                     const SizedBox(height: 20),
                     Text(
                       '네컷 모아',
@@ -35,55 +53,36 @@ class LoginScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    _GlassCard(
-                      child: Column(
-                        children: [
-                          _IconInputField(
-                            hintText: '아이디/이메일 입력',
-                            keyboardType: TextInputType.emailAddress,
-                            icon: Icons.email_outlined,
-                          ),
-                          const SizedBox(height: 12),
-                          _IconInputField(
-                            hintText: '비밀번호 입력',
-                            obscureText: true,
-                            icon: Icons.lock_outline,
-                          ),
-                          const SizedBox(height: 16),
-                          _PrimaryButton(
-                            text: '로그인',
-                            onTap: () {
-                              // TODO: 로그인 로직
-                            },
-                          ),
-                        ],
-                      ),
+                    // 메인 진입: 세 가지 시작 버튼
+                    _AnimatedPrimaryButton(
+                      text: '이메일로 시작하기',
+                      gradientColors: const [
+                        AppColors.skyMid,
+                        AppColors.primary,
+                      ],
+                      onTap: () => _showEmailLoginSheet(context),
                     ),
-                    const SizedBox(height: 16),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SignupScreen(),
-                          ),
-                        );
+                    const SizedBox(height: 24),
+                    _AnimatedSocialButton(
+                      label: '카카오로 시작하기',
+                      backgroundColor: const Color(0xFFFFE812),
+                      foregroundColor: Colors.black,
+                      iconAsset:
+                          'lib/presentation/screens/login/assets/kakao_icon.png',
+                      onTap: () {
+                        // TODO: 카카오 로그인/회원가입 통합 플로우
                       },
-                      child: const Text.rich(
-                        TextSpan(
-                          text: '아직 회원이 아니신가요? ',
-                          children: [
-                            TextSpan(
-                              text: '회원가입',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
-                              ),
-                            ),
-                          ],
-                          style: TextStyle(color: AppColors.textPrimary),
-                        ),
-                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _AnimatedSocialButton(
+                      label: 'Google로 시작하기',
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black87,
+                      iconAsset:
+                          'lib/presentation/screens/login/assets/google_icon.png',
+                      onTap: () {
+                        // TODO: 구글 로그인/회원가입 통합 플로우
+                      },
                     ),
                   ],
                 ),
@@ -94,6 +93,112 @@ class LoginScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showEmailLoginSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) {
+      return DraggableScrollableSheet(
+        initialChildSize: 0.55,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (_, controller) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(24),
+                topRight: Radius.circular(24),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 20,
+                  offset: Offset(0, -8),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: ListView(
+              controller: controller,
+              children: [
+                const SizedBox(height: 20),
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.divider,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '이메일로 로그인',
+                  style: GoogleFonts.jua(
+                    fontSize: 22,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _IconInputField(
+                  hintText: '아이디/이메일 입력',
+                  keyboardType: TextInputType.emailAddress,
+                  icon: Icons.email_outlined,
+                  strongBorder: true,
+                ),
+                const SizedBox(height: 12),
+                _IconInputField(
+                  hintText: '비밀번호 입력',
+                  obscureText: true,
+                  icon: Icons.lock_outline,
+                  strongBorder: true,
+                ),
+                const SizedBox(height: 16),
+                _PrimaryButton(
+                  text: '로그인',
+                  onTap: () {
+                    // TODO: 로그인 로직
+                    Navigator.pop(context);
+                  },
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        // TODO: 비밀번호 찾기
+                      },
+                      child: const Text('비밀번호 찾기'),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('|'),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SignupScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text('회원가입하기'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
 }
 
 class _Logo extends StatelessWidget {
@@ -122,6 +227,7 @@ class _Logo extends StatelessWidget {
   }
 }
 
+// _GlassCard: 현재 메인 진입 화면에서는 사용하지 않지만, 바텀시트/향후 폼 카드에 재활용할 수 있어 유지합니다.
 class _GlassCard extends StatelessWidget {
   final Widget child;
   const _GlassCard({required this.child});
@@ -159,12 +265,14 @@ class _IconInputField extends StatefulWidget {
   final bool obscureText;
   final TextInputType? keyboardType;
   final IconData icon;
+  final bool strongBorder; // 바텀시트용 진한 외곽선 스타일
 
   const _IconInputField({
     required this.hintText,
     required this.icon,
     this.obscureText = false,
     this.keyboardType,
+    this.strongBorder = false,
   });
 
   @override
@@ -204,15 +312,25 @@ class _IconInputFieldState extends State<_IconInputField> {
         hintText: isFocused ? '' : widget.hintText,
         hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.9)),
         filled: true,
-        fillColor: Colors.white.withOpacity(0.28),
+        fillColor: widget.strongBorder
+            ? Colors.white
+            : Colors.white.withOpacity(0.28),
         contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.5)),
+          borderSide: BorderSide(
+            color: widget.strongBorder
+                ? AppColors.divider
+                : Colors.white.withOpacity(0.5),
+            width: widget.strongBorder ? 1 : 1,
+          ),
         ),
-        focusedBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(color: AppColors.primary, width: 1.4),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(12)),
+          borderSide: BorderSide(
+            color: AppColors.primary,
+            width: widget.strongBorder ? 1.4 : 1.4,
+          ),
         ),
       ),
     );
@@ -222,8 +340,15 @@ class _IconInputFieldState extends State<_IconInputField> {
 class _PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback onTap;
+  final List<Color>? gradientColors;
+  final double height;
 
-  const _PrimaryButton({required this.text, required this.onTap});
+  const _PrimaryButton({
+    required this.text,
+    required this.onTap,
+    this.gradientColors,
+    this.height = 52,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -234,10 +359,12 @@ class _PrimaryButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              AppColors.primary.withOpacity(0.95),
-              AppColors.primary.withOpacity(0.75),
-            ],
+            colors:
+                gradientColors ??
+                [
+                  AppColors.primary.withOpacity(0.95),
+                  AppColors.primary.withOpacity(0.75),
+                ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -250,6 +377,8 @@ class _PrimaryButton extends StatelessWidget {
             ),
           ],
         ),
+        height: height,
+        alignment: Alignment.center,
         child: Text(
           text,
           textAlign: TextAlign.center,
@@ -264,36 +393,205 @@ class _PrimaryButton extends StatelessWidget {
   }
 }
 
+class _AnimatedPrimaryButton extends StatefulWidget {
+  final String text;
+  final VoidCallback onTap;
+  final List<Color>? gradientColors;
+  final double height;
+
+  const _AnimatedPrimaryButton({
+    required this.text,
+    required this.onTap,
+    this.gradientColors,
+    this.height = 52,
+  });
+
+  @override
+  State<_AnimatedPrimaryButton> createState() => _AnimatedPrimaryButtonState();
+}
+
+class _AnimatedPrimaryButtonState extends State<_AnimatedPrimaryButton> {
+  bool _pressed = false;
+  void _set(bool v) => setState(() => _pressed = v);
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => _set(true),
+      onTapCancel: () => _set(false),
+      onTapUp: (_) => _set(false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 100),
+        scale: _pressed ? 0.98 : 1,
+        child: _PrimaryButton(
+          text: widget.text,
+          onTap: widget.onTap,
+          gradientColors: widget.gradientColors,
+          height: widget.height,
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedSocialButton extends StatelessWidget {
+  final String label;
+  final String iconAsset;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final VoidCallback onTap;
+
+  const _AnimatedSocialButton({
+    required this.label,
+    required this.iconAsset,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _PressScale(
+      child: Container(
+        width: double.infinity,
+        height: 52,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 10,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Image.asset(iconAsset, width: 20, height: 20),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: TextStyle(
+                  color: foregroundColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PressScale extends StatefulWidget {
+  final Widget child;
+
+  const _PressScale({required this.child});
+
+  @override
+  State<_PressScale> createState() => _PressScaleState();
+}
+
+class _PressScaleState extends State<_PressScale> {
+  bool _pressed = false;
+  void _set(bool v) => setState(() => _pressed = v);
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _set(true),
+      onTapCancel: () => _set(false),
+      onTapUp: (_) => _set(false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 100),
+        scale: _pressed ? 0.98 : 1,
+        child: Stack(alignment: Alignment.center, children: [widget.child]),
+      ),
+    );
+  }
+}
+
 class _SkyBackground extends StatelessWidget {
   const _SkyBackground();
 
   @override
   Widget build(BuildContext context) {
+    return _SkyBackgroundAnimated();
+  }
+}
+
+class _SkyBackgroundAnimated extends StatefulWidget {
+  @override
+  State<_SkyBackgroundAnimated> createState() => _SkyBackgroundAnimatedState();
+}
+
+class _SkyBackgroundAnimatedState extends State<_SkyBackgroundAnimated>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 6),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Positioned.fill(
-      child: Stack(
-        children: [
-          // Sky gradient base
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [AppColors.skyLight, AppColors.skyMid],
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final t = _controller.value * 2 * math.pi;
+          final dx1 = 6 * math.sin(t);
+          final dy1 = 4 * math.cos(t);
+          final dx2 = 8 * math.cos(t * 0.8);
+          final dy2 = 5 * math.sin(t * 0.8);
+          return Stack(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [AppColors.skyLight, AppColors.skyMid],
+                  ),
+                ),
               ),
-            ),
-          ),
-          // Soft blobs
-          Positioned(
-            top: -40,
-            right: -20,
-            child: _Blob(size: 160, color: AppColors.accent.withOpacity(0.35)),
-          ),
-          Positioned(
-            bottom: -50,
-            left: -20,
-            child: _Blob(size: 200, color: AppColors.skyDeep.withOpacity(0.25)),
-          ),
-        ],
+              Positioned(
+                top: -40 + dy1,
+                right: -20 + dx1,
+                child: Opacity(
+                  opacity: 0.35,
+                  child: _Blob(size: 160, color: AppColors.accent),
+                ),
+              ),
+              Positioned(
+                bottom: -50 + dy2,
+                left: -20 + dx2,
+                child: Opacity(
+                  opacity: 0.25,
+                  child: _Blob(size: 200, color: AppColors.skyDeep),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
