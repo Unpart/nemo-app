@@ -7,6 +7,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/app/theme/app_colors.dart';
 import 'package:image_picker/image_picker.dart';
 import 'login_screen.dart';
+import 'widgets/email_verification_section.dart';
+import 'package:frontend/services/auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -21,10 +23,15 @@ class _SignupScreenState extends State<SignupScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _nicknameController = TextEditingController();
+  final _emailCodeController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
 
   File? _selectedImage;
   bool _isLoading = false;
+  bool _emailCodeSent = false;
+  bool _emailVerified = false;
+  bool _isSendingCode = false;
+  bool _isVerifyingCode = false;
 
   @override
   void dispose() {
@@ -32,6 +39,7 @@ class _SignupScreenState extends State<SignupScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _nicknameController.dispose();
+    _emailCodeController.dispose();
     super.dispose();
   }
 
@@ -39,7 +47,7 @@ class _SignupScreenState extends State<SignupScreen> {
     if (value == null || value.isEmpty) {
       return '이메일을 입력해주세요';
     }
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}\$');
     if (!emailRegex.hasMatch(value)) {
       return '올바른 이메일 형식을 입력해주세요';
     }
@@ -82,6 +90,80 @@ class _SignupScreenState extends State<SignupScreen> {
     return null;
   }
 
+  Future<void> _sendEmailCode() async {
+    if (_validateEmail(_emailController.text) != null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('유효한 이메일을 입력해주세요')));
+      return;
+    }
+    setState(() {
+      _isSendingCode = true;
+    });
+    try {
+      await AuthService().sendEmailVerification(_emailController.text);
+      if (!mounted) return;
+      setState(() {
+        _emailCodeSent = true;
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('인증 메일을 발송했습니다. 메일함을 확인해주세요.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('인증 메일 발송 실패: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingCode = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _verifyEmailCode() async {
+    if (_emailCodeController.text.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('인증 코드를 입력해주세요')));
+      return;
+    }
+    setState(() {
+      _isVerifyingCode = true;
+    });
+    try {
+      final ok = await AuthService().confirmEmailVerification(
+        email: _emailController.text.trim(),
+        code: _emailCodeController.text.trim(),
+      );
+      if (!mounted) return;
+      if (ok) {
+        setState(() {
+          _emailVerified = true;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('이메일 인증이 완료되었습니다.')));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('인증 실패: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVerifyingCode = false;
+        });
+      }
+    }
+  }
+
   Future<void> _pickImage() async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -97,6 +179,7 @@ class _SignupScreenState extends State<SignupScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('이미지 선택 중 오류가 발생했습니다')));
@@ -118,6 +201,7 @@ class _SignupScreenState extends State<SignupScreen> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('사진 촬영 중 오류가 발생했습니다')));
@@ -168,46 +252,52 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _handleSignup() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+    if (_formKey.currentState!.validate() == false) return;
+    if (_emailVerified == false) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('이메일 인증을 먼저 완료해주세요')));
+      return;
+    }
 
-      try {
-        // TODO: 회원가입 API 호출
-        // POST /api/users/signup
-        // {
-        //   "email": _emailController.text,
-        //   "password": _passwordController.text,
-        //   "nickname": _nicknameController.text,
-        //   "profileImage": _selectedImage (multipart/form-data)
-        // }
+    setState(() {
+      _isLoading = true;
+    });
 
-        // 임시 딜레이 (실제 API 호출 시 제거)
-        await Future.delayed(const Duration(seconds: 2));
+    try {
+      // TODO: 회원가입 API 호출 (이메일 인증 완료 상태 전제)
+      // POST /api/users/signup
+      // {
+      //   "email": _emailController.text,
+      //   "password": _passwordController.text,
+      //   "nickname": _nicknameController.text,
+      //   "profileImage": _selectedImage (multipart/form-data)
+      // }
 
-        // 성공 시 로그인 화면으로 이동
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-          );
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('회원가입이 완료되었습니다!')));
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('회원가입 중 오류가 발생했습니다: $e')));
-        }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
+      // 임시 딜레이 (실제 API 호출 시 제거)
+      await Future.delayed(const Duration(seconds: 2));
+
+      // 성공 시 로그인 화면으로 이동
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('회원가입이 완료되었습니다!')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('회원가입 중 오류가 발생했습니다: $e')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -280,14 +370,19 @@ class _SignupScreenState extends State<SignupScreen> {
                               ),
                               const SizedBox(height: 12),
 
-                              // 이메일 입력
-                              _IconInputField(
-                                hintText: '이메일 입력',
-                                keyboardType: TextInputType.emailAddress,
-                                icon: Icons.email_outlined,
-                                controller: _emailController,
-                                validator: _validateEmail,
+                              // 이메일 인증 섹션 (분리 위젯)
+                              EmailVerificationSection(
+                                emailController: _emailController,
+                                codeController: _emailCodeController,
+                                emailValidator: _validateEmail,
+                                onSendCode: _sendEmailCode,
+                                onVerifyCode: _verifyEmailCode,
+                                isSendingCode: _isSendingCode,
+                                isVerifyingCode: _isVerifyingCode,
+                                codeSent: _emailCodeSent,
+                                emailVerified: _emailVerified,
                               ),
+
                               const SizedBox(height: 12),
 
                               // 비밀번호 입력
@@ -310,7 +405,7 @@ class _SignupScreenState extends State<SignupScreen> {
                               ),
                               const SizedBox(height: 20),
 
-                              // 회원가입 버튼
+                              // 회원가입 버튼 (인증 미완료 시 안내)
                               _PrimaryButton(
                                 text: _isLoading ? '가입 중...' : '회원가입',
                                 onTap: _isLoading
@@ -477,7 +572,9 @@ class _IconInputFieldState extends State<_IconInputField> {
           minHeight: 36,
         ),
         hintText: isFocused ? '' : widget.hintText,
-        hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.9)),
+        hintStyle: TextStyle(
+          color: AppColors.textSecondary.withValues(alpha: 0.9),
+        ),
         filled: true,
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
@@ -524,8 +621,8 @@ class _PrimaryButton extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              AppColors.primary.withOpacity(0.95),
-              AppColors.primary.withOpacity(0.75),
+              AppColors.primary.withValues(alpha: 0.95),
+              AppColors.primary.withValues(alpha: 0.75),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -633,7 +730,7 @@ class _ImagePickerOption extends StatelessWidget {
             width: 60,
             height: 60,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: AppColors.primary, size: 30),

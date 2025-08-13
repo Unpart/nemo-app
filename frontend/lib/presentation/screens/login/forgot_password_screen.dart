@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/app/theme/app_colors.dart';
 import 'login_screen.dart';
+import 'widgets/reset_info_card.dart';
+import 'widgets/reset_request_form.dart';
+import 'widgets/reset_success_card.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -143,107 +146,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           child: Column(
                             children: [
                               if (!_isResetSent) ...[
-                                // 안내 메시지
-                                Container(
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.primary.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: AppColors.primary.withOpacity(0.3),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.info_outline,
-                                        color: AppColors.primary,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          '가입하신 이메일 주소를 입력하시면\n비밀번호 재설정 링크를 발송해드립니다.',
-                                          style: TextStyle(
-                                            color: AppColors.textPrimary,
-                                            fontSize: 14,
-                                            height: 1.4,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                const ResetInfoCard(),
                                 const SizedBox(height: 20),
 
-                                // 이메일 입력
-                                _IconInputField(
-                                  hintText: '이메일 주소 입력',
-                                  keyboardType: TextInputType.emailAddress,
-                                  icon: Icons.email_outlined,
-                                  controller: _emailController,
-                                  validator: _validateEmail,
-                                ),
-                                const SizedBox(height: 20),
-
-                                // 재설정 버튼
-                                _PrimaryButton(
-                                  text: _isLoading ? '발송 중...' : '재설정 링크 발송',
-                                  onTap: _isLoading
-                                      ? () {}
-                                      : () => _sendResetEmail(),
+                                ResetRequestForm(
+                                  formKey: _formKey,
+                                  emailController: _emailController,
+                                  emailValidator: _validateEmail,
+                                  onSubmit: _sendResetEmail,
                                   isLoading: _isLoading,
                                 ),
                               ] else ...[
-                                // 성공 메시지
-                                Container(
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: Colors.green.withOpacity(0.3),
-                                    ),
-                                  ),
-                                  child: Column(
-                                    children: [
-                                      Icon(
-                                        Icons.check_circle_outline,
-                                        color: Colors.green,
-                                        size: 48,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        '재설정 링크 발송 완료!',
-                                        style: TextStyle(
-                                          color: Colors.green[700],
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        '입력하신 이메일로 비밀번호 재설정 링크가\n발송되었습니다.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: AppColors.textSecondary,
-                                          fontSize: 14,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        '이메일의 링크를 클릭하여\n새로운 비밀번호를 설정해주세요.',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: AppColors.textSecondary,
-                                          fontSize: 12,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                                const ResetSuccessCard(),
                                 const SizedBox(height: 20),
 
                                 // 로그인으로 이동 버튼

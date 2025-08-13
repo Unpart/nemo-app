@@ -1,132 +1,20 @@
-// 📁 lib/presentation/screens/login/login_screen.dart
-// removed unnecessary imports
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/app/theme/app_colors.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/providers/user_provider.dart';
-import 'signup_screen.dart';
-import 'forgot_password_screen.dart';
-import '../user/mypage_screen.dart';
-import 'widgets/login_background.dart';
-import 'widgets/login_logo.dart';
-import 'widgets/email_login_form.dart';
-import 'widgets/social_login_buttons.dart';
+import '../forgot_password_screen.dart';
+import '../signup_screen.dart';
 
-class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
+class EmailLoginForm extends StatefulWidget {
+  const EmailLoginForm({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          const LoginBackground(),
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 32,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      duration: const Duration(milliseconds: 600),
-                      curve: Curves.easeOutCubic,
-                      child: const LoginLogo(),
-                      builder: (context, value, child) {
-                        return Opacity(
-                          opacity: value,
-                          child: Transform.translate(
-                            offset: Offset(0, (1 - value) * 16),
-                            child: Transform.scale(
-                              scale: 0.95 + 0.05 * value,
-                              child: child,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      '네컷 모아',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.jua(
-                        fontSize: 32,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    _AnimatedPrimaryButton(
-                      text: '이메일로 시작하기',
-                      gradientColors: const [
-                        AppColors.skyMid,
-                        AppColors.primary,
-                      ],
-                      onTap: () => _showEmailLoginSheet(context),
-                    ),
-                    const SizedBox(height: 24),
-                    SocialLoginButtons(
-                      onKakaoTap: () {
-                        // TODO: 카카오 로그인/회원가입 통합 플로우
-                      },
-                      onGoogleTap: () {
-                        // TODO: 구글 로그인/회원가입 통합 플로우
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                    // 임시 마이페이지 버튼 (나중에 제거 예정)
-                    _AnimatedPrimaryButton(
-                      text: '마이페이지 (임시)',
-                      gradientColors: const [Colors.orange, Colors.deepOrange],
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MyPageScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  State<EmailLoginForm> createState() => _EmailLoginFormState();
 }
 
-void _showEmailLoginSheet(BuildContext context) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (ctx) {
-      return DraggableScrollableSheet(
-        initialChildSize: 0.55,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        builder: (_, controller) {
-          return const EmailLoginForm();
-        },
-      );
-    },
-  );
-}
-
-class _EmailLoginForm extends StatefulWidget {
-  @override
-  State<_EmailLoginForm> createState() => _EmailLoginFormState();
-}
-
-class _EmailLoginFormState extends State<_EmailLoginForm> {
+class _EmailLoginFormState extends State<EmailLoginForm> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -142,7 +30,7 @@ class _EmailLoginFormState extends State<_EmailLoginForm> {
     if (value == null || value.isEmpty) {
       return '이메일을 입력해주세요';
     }
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}\$');
     if (!emailRegex.hasMatch(value)) {
       return '올바른 이메일 형식을 입력해주세요';
     }
@@ -168,9 +56,7 @@ class _EmailLoginFormState extends State<_EmailLoginForm> {
           _passwordController.text,
         );
 
-        if (result['success'] == true) {
-          if (!mounted) return;
-          // UserProvider에 사용자 정보 저장
+        if (result['success'] == true && mounted) {
           final userProvider = Provider.of<UserProvider>(
             context,
             listen: false,
@@ -182,23 +68,19 @@ class _EmailLoginFormState extends State<_EmailLoginForm> {
             profileImageUrl: result['profileImageUrl'],
           );
 
-          // 로그인 성공 시 화면 이동
-          if (mounted) {
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('로그인되었습니다!'),
-                backgroundColor: Colors.green,
-              ),
-            );
-          }
-        }
-      } catch (e) {
-        if (mounted) {
+          Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('로그인 실패: $e'), backgroundColor: Colors.red),
+            const SnackBar(
+              content: Text('로그인되었습니다!'),
+              backgroundColor: Colors.green,
+            ),
           );
         }
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('로그인 실패: $e'), backgroundColor: Colors.red),
+        );
       }
     }
   }
@@ -310,6 +192,7 @@ class _IconInputField extends StatefulWidget {
   final IconData icon;
   final bool strongBorder;
   final String? Function(String?)? validator;
+  final void Function(String)? onChanged;
   final TextEditingController? controller;
 
   const _IconInputField({
@@ -319,6 +202,7 @@ class _IconInputField extends StatefulWidget {
     this.keyboardType,
     this.strongBorder = false,
     this.validator,
+    this.onChanged,
     this.controller,
   });
 
@@ -351,6 +235,7 @@ class _IconInputFieldState extends State<_IconInputField> {
       obscureText: widget.obscureText,
       keyboardType: widget.keyboardType,
       validator: widget.validator,
+      onChanged: widget.onChanged,
       decoration: InputDecoration(
         isDense: true,
         prefixIcon: Icon(widget.icon, size: 20, color: AppColors.textSecondary),
@@ -359,20 +244,18 @@ class _IconInputFieldState extends State<_IconInputField> {
           minHeight: 36,
         ),
         hintText: isFocused ? '' : widget.hintText,
-        hintStyle: TextStyle(
-          color: AppColors.textSecondary.withValues(alpha: 0.9),
-        ),
+        hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.9)),
         filled: true,
         fillColor: widget.strongBorder
             ? Colors.white
-            : Colors.white.withValues(alpha: 0.28),
+            : Colors.white.withOpacity(0.28),
         contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(
             color: widget.strongBorder
                 ? AppColors.divider
-                : Colors.white.withValues(alpha: 0.5),
+                : Colors.white.withOpacity(0.5),
             width: widget.strongBorder ? 1 : 1,
           ),
         ),
@@ -400,13 +283,8 @@ class _IconInputFieldState extends State<_IconInputField> {
 class _PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback onTap;
-  final List<Color>? gradientColors;
 
-  const _PrimaryButton({
-    required this.text,
-    required this.onTap,
-    this.gradientColors,
-  });
+  const _PrimaryButton({required this.text, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -417,12 +295,10 @@ class _PrimaryButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors:
-                gradientColors ??
-                [
-                  AppColors.primary.withValues(alpha: 0.95),
-                  AppColors.primary.withValues(alpha: 0.75),
-                ],
+            colors: [
+              AppColors.primary.withOpacity(0.95),
+              AppColors.primary.withOpacity(0.75),
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -435,7 +311,6 @@ class _PrimaryButton extends StatelessWidget {
             ),
           ],
         ),
-        alignment: Alignment.center,
         child: Text(
           text,
           textAlign: TextAlign.center,
@@ -449,73 +324,3 @@ class _PrimaryButton extends StatelessWidget {
     );
   }
 }
-
-class _AnimatedPrimaryButton extends StatefulWidget {
-  final String text;
-  final VoidCallback onTap;
-  final List<Color>? gradientColors;
-
-  const _AnimatedPrimaryButton({
-    required this.text,
-    required this.onTap,
-    this.gradientColors,
-  });
-
-  @override
-  State<_AnimatedPrimaryButton> createState() => _AnimatedPrimaryButtonState();
-}
-
-class _AnimatedPrimaryButtonState extends State<_AnimatedPrimaryButton> {
-  bool _pressed = false;
-  void _set(bool v) => setState(() => _pressed = v);
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => _set(true),
-      onTapCancel: () => _set(false),
-      onTapUp: (_) => _set(false),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 100),
-        scale: _pressed ? 0.98 : 1,
-        child: _PrimaryButton(
-          text: widget.text,
-          onTap: widget.onTap,
-          gradientColors: widget.gradientColors,
-        ),
-      ),
-    );
-  }
-}
-
-// removed local _AnimatedSocialButton (moved to widgets/social_login_buttons.dart)
-
-class _PressScale extends StatefulWidget {
-  final Widget child;
-
-  const _PressScale({required this.child});
-
-  @override
-  State<_PressScale> createState() => _PressScaleState();
-}
-
-class _PressScaleState extends State<_PressScale> {
-  bool _pressed = false;
-  void _set(bool v) => setState(() => _pressed = v);
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => _set(true),
-      onTapCancel: () => _set(false),
-      onTapUp: (_) => _set(false),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 100),
-        scale: _pressed ? 0.98 : 1,
-        child: Stack(alignment: Alignment.center, children: [widget.child]),
-      ),
-    );
-  }
-}
-
-// Removed local background and logo; using widgets/login_background.dart and widgets/login_logo.dart

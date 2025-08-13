@@ -16,7 +16,10 @@ import 'widgets/primary_button.dart';
 import 'widgets/secondary_button.dart';
 import 'widgets/info_row.dart';
 import 'widgets/menu_button.dart';
-import 'widgets/image_picker_option.dart';
+import 'widgets/profile_card.dart';
+import 'widgets/account_info_card.dart';
+import 'widgets/account_actions_card.dart';
+import 'widgets/profile_image_picker_sheet.dart';
 import 'widgets/sky_background.dart';
 
 class MyPageScreen extends StatefulWidget {
@@ -137,40 +140,9 @@ class _MyPageScreenState extends State<MyPageScreen> {
     showModalBottomSheet(
       context: context,
       builder: (BuildContext context) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '프로필 이미지 선택',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ImagePickerOption(
-                    icon: Icons.camera_alt,
-                    label: '카메라',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _takePhoto();
-                    },
-                  ),
-                  ImagePickerOption(
-                    icon: Icons.photo_library,
-                    label: '갤러리',
-                    onTap: () {
-                      Navigator.pop(context);
-                      _pickImage();
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
+        return ProfileImagePickerSheet(
+          onTakePhoto: _takePhoto,
+          onPickGallery: _pickImage,
         );
       },
     );
@@ -606,144 +578,22 @@ class _MyPageScreenState extends State<MyPageScreen> {
                         ),
                         const SizedBox(height: 20),
 
-                        // 프로필 섹션
-                        GlassCard(
-                          child: Column(
-                            children: [
-                              // 프로필 이미지
-                              GestureDetector(
-                                onTap: _isEditing
-                                    ? _showImagePickerDialog
-                                    : null,
-                                child: Stack(
-                                  children: [
-                                    Container(
-                                      width: 100,
-                                      height: 100,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: Colors.grey[200],
-                                        border: Border.all(
-                                          color: AppColors.primary,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      child: _selectedImage != null
-                                          ? ClipOval(
-                                              child: Image.file(
-                                                _selectedImage!,
-                                                width: 100,
-                                                height: 100,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            )
-                                          : _userInfo['profileImage'] != null
-                                          ? ClipOval(
-                                              child: Image.network(
-                                                _userInfo['profileImage'],
-                                                width: 100,
-                                                height: 100,
-                                                fit: BoxFit.cover,
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.person,
-                                              size: 50,
-                                              color: AppColors.textSecondary,
-                                            ),
-                                    ),
-                                    if (_isEditing)
-                                      Positioned(
-                                        bottom: 0,
-                                        right: 0,
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.primary,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                            Icons.camera_alt,
-                                            color: Colors.white,
-                                            size: 16,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-
-                              // 사용자 정보
-                              if (_isEditing) ...[
-                                Form(
-                                  key: _formKey,
-                                  child: Column(
-                                    children: [
-                                      IconInputField(
-                                        hintText: '닉네임 입력 (2-10자)',
-                                        keyboardType: TextInputType.text,
-                                        icon: Icons.person_outline,
-                                        controller: _nicknameController,
-                                        validator: _validateNickname,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: SecondaryButton(
-                                              text: '취소',
-                                              onTap: () {
-                                                setState(() {
-                                                  _isEditing = false;
-                                                  _nicknameController.text =
-                                                      _userInfo['nickname'];
-                                                  _selectedImage = null;
-                                                });
-                                              },
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: PrimaryButton(
-                                              text: '저장',
-                                              onTap: _updateUserInfo,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ] else ...[
-                                Text(
-                                  _userInfo['nickname'],
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _userInfo['email'],
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                PrimaryButton(
-                                  text: '정보 수정',
-                                  onTap: () {
-                                    setState(() {
-                                      _isEditing = true;
-                                    });
-                                  },
-                                ),
-                              ],
-                            ],
-                          ),
+                        // 프로필 섹션 (분리 위젯 사용)
+                        ProfileCard(
+                          isEditing: _isEditing,
+                          nicknameController: _nicknameController,
+                          email: _userInfo['email'],
+                          nickname: _userInfo['nickname'],
+                          profileImageUrl: _userInfo['profileImage'],
+                          selectedImage: _selectedImage,
+                          onEdit: () => setState(() => _isEditing = true),
+                          onCancel: () => setState(() {
+                            _isEditing = false;
+                            _nicknameController.text = _userInfo['nickname'];
+                            _selectedImage = null;
+                          }),
+                          onSave: _updateUserInfo,
+                          onOpenImagePicker: _showImagePickerDialog,
                         ),
                         const SizedBox(height: 20),
 
@@ -778,34 +628,9 @@ class _MyPageScreenState extends State<MyPageScreen> {
                         const SizedBox(height: 20),
 
                         // 계정 관리
-                        GlassCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                '계정 관리',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              MenuButton(
-                                icon: Icons.logout,
-                                label: '로그아웃',
-                                onTap: _logout,
-                                color: AppColors.textSecondary,
-                              ),
-                              const SizedBox(height: 12),
-                              MenuButton(
-                                icon: Icons.delete_forever,
-                                label: '회원탈퇴',
-                                onTap: _deleteAccount,
-                                color: Colors.red,
-                              ),
-                            ],
-                          ),
+                        AccountActionsCard(
+                          onLogout: _logout,
+                          onDelete: _deleteAccount,
                         ),
                       ],
                     ),
