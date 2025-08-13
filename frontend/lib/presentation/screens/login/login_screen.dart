@@ -3,8 +3,13 @@ import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:frontend/app/theme/app_colors.dart';
+import 'package:frontend/services/auth_service.dart';
+import 'package:frontend/providers/user_provider.dart';
 import 'signup_screen.dart';
+import 'forgot_password_screen.dart';
+import '../user/mypage_screen.dart';
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -53,7 +58,6 @@ class LoginScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    // 메인 진입: 세 가지 시작 버튼
                     _AnimatedPrimaryButton(
                       text: '이메일로 시작하기',
                       gradientColors: const [
@@ -84,6 +88,20 @@ class LoginScreen extends StatelessWidget {
                         // TODO: 구글 로그인/회원가입 통합 플로우
                       },
                     ),
+                    const SizedBox(height: 24),
+                    // 임시 마이페이지 버튼 (나중에 제거 예정)
+                    _AnimatedPrimaryButton(
+                      text: '마이페이지 (임시)',
+                      gradientColors: const [Colors.orange, Colors.deepOrange],
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MyPageScreen(),
+                          ),
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -106,50 +124,142 @@ void _showEmailLoginSheet(BuildContext context) {
         minChildSize: 0.4,
         maxChildSize: 0.9,
         builder: (_, controller) {
-          return Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(24),
-                topRight: Radius.circular(24),
+          return _EmailLoginForm();
+        },
+      );
+    },
+  );
+}
+
+class _EmailLoginForm extends StatefulWidget {
+  @override
+  State<_EmailLoginForm> createState() => _EmailLoginFormState();
+}
+
+class _EmailLoginFormState extends State<_EmailLoginForm> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  String? _validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return '이메일을 입력해주세요';
+    }
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(value)) {
+      return '올바른 이메일 형식을 입력해주세요';
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return '비밀번호를 입력해주세요';
+    }
+    if (value.length < 6) {
+      return '비밀번호는 6자 이상이어야 합니다';
+    }
+    return null;
+  }
+
+  void _handleLogin() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        final authService = AuthService();
+        final result = await authService.login(
+          _emailController.text,
+          _passwordController.text,
+        );
+
+        if (result['success'] == true) {
+          // UserProvider에 사용자 정보 저장
+          final userProvider = Provider.of<UserProvider>(
+            context,
+            listen: false,
+          );
+          userProvider.setUser(
+            userId: result['userId'],
+            nickname: result['nickname'],
+            accessToken: result['accessToken'],
+            profileImageUrl: result['profileImageUrl'],
+          );
+
+          // 로그인 성공 시 화면 이동
+          if (mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('로그인되었습니다!'),
+                backgroundColor: Colors.green,
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 20,
-                  offset: Offset(0, -8),
-                ),
-              ],
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('로그인 실패: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 20,
+            offset: Offset(0, -8),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+      child: ListView(
+        children: [
+          const SizedBox(height: 20),
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.divider,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-            child: ListView(
-              controller: controller,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '이메일로 로그인',
+            style: GoogleFonts.jua(fontSize: 22, color: AppColors.textPrimary),
+          ),
+          const SizedBox(height: 16),
+          Form(
+            key: _formKey,
+            child: Column(
               children: [
-                const SizedBox(height: 20),
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: AppColors.divider,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '이메일로 로그인',
-                  style: GoogleFonts.jua(
-                    fontSize: 22,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 16),
                 _IconInputField(
                   hintText: '아이디/이메일 입력',
                   keyboardType: TextInputType.emailAddress,
                   icon: Icons.email_outlined,
                   strongBorder: true,
+                  controller: _emailController,
+                  validator: _validateEmail,
                 ),
                 const SizedBox(height: 12),
                 _IconInputField(
@@ -157,24 +267,25 @@ void _showEmailLoginSheet(BuildContext context) {
                   obscureText: true,
                   icon: Icons.lock_outline,
                   strongBorder: true,
+                  controller: _passwordController,
+                  validator: _validatePassword,
                 ),
                 const SizedBox(height: 16),
-                _PrimaryButton(
-                  text: '로그인',
-                  onTap: () {
-                    // TODO: 로그인 로직
-                    Navigator.pop(context);
-                  },
-                ),
+                _PrimaryButton(text: '로그인', onTap: _handleLogin),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     TextButton(
                       onPressed: () {
-                        // TODO: 비밀번호 찾기
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ForgotPasswordScreen(),
+                          ),
+                        );
                       },
-                      child: const Text('비밀번호 찾기'),
+                      child: const Text('비밀번호 재설정'),
                     ),
                     const SizedBox(width: 8),
                     const Text('|'),
@@ -194,11 +305,11 @@ void _showEmailLoginSheet(BuildContext context) {
                 ),
               ],
             ),
-          );
-        },
-      );
-    },
-  );
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Logo extends StatelessWidget {
@@ -227,45 +338,15 @@ class _Logo extends StatelessWidget {
   }
 }
 
-// _GlassCard: 현재 메인 진입 화면에서는 사용하지 않지만, 바텀시트/향후 폼 카드에 재활용할 수 있어 유지합니다.
-class _GlassCard extends StatelessWidget {
-  final Widget child;
-  const _GlassCard({required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.35),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 12,
-                offset: Offset(0, 8),
-              ),
-            ],
-          ),
-          child: child,
-        ),
-      ),
-    );
-  }
-}
-
 class _IconInputField extends StatefulWidget {
   final String hintText;
   final bool obscureText;
   final TextInputType? keyboardType;
   final IconData icon;
-  final bool strongBorder; // 바텀시트용 진한 외곽선 스타일
+  final bool strongBorder;
+  final String? Function(String?)? validator;
+  final void Function(String)? onChanged;
+  final TextEditingController? controller;
 
   const _IconInputField({
     required this.hintText,
@@ -273,6 +354,9 @@ class _IconInputField extends StatefulWidget {
     this.obscureText = false,
     this.keyboardType,
     this.strongBorder = false,
+    this.validator,
+    this.onChanged,
+    this.controller,
   });
 
   @override
@@ -298,10 +382,13 @@ class _IconInputFieldState extends State<_IconInputField> {
   @override
   Widget build(BuildContext context) {
     final bool isFocused = _focusNode.hasFocus;
-    return TextField(
+    return TextFormField(
+      controller: widget.controller,
       focusNode: _focusNode,
       obscureText: widget.obscureText,
       keyboardType: widget.keyboardType,
+      validator: widget.validator,
+      onChanged: widget.onChanged,
       decoration: InputDecoration(
         isDense: true,
         prefixIcon: Icon(widget.icon, size: 20, color: AppColors.textSecondary),
@@ -332,6 +419,15 @@ class _IconInputFieldState extends State<_IconInputField> {
             width: widget.strongBorder ? 1.4 : 1.4,
           ),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1.4),
+        ),
+        errorStyle: const TextStyle(color: Colors.red, fontSize: 12),
       ),
     );
   }

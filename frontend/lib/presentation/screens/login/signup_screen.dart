@@ -1,13 +1,216 @@
 // 📁 lib/presentation/screens/login/signup_screen.dart
 import 'dart:ui';
 import 'dart:math' as math;
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:frontend/app/theme/app_colors.dart';
+import 'package:image_picker/image_picker.dart';
 import 'login_screen.dart';
 
-class SignupScreen extends StatelessWidget {
+class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
+
+  @override
+  State<SignupScreen> createState() => _SignupScreenState();
+}
+
+class _SignupScreenState extends State<SignupScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _nicknameController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+
+  File? _selectedImage;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    _nicknameController.dispose();
+    super.dispose();
+  }
+
+  String? _validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return '이메일을 입력해주세요';
+    }
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(value)) {
+      return '올바른 이메일 형식을 입력해주세요';
+    }
+    return null;
+  }
+
+  String? _validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return '비밀번호를 입력해주세요';
+    }
+    if (value.length < 6) {
+      return '비밀번호는 6자 이상이어야 합니다';
+    }
+    if (!RegExp(r'^(?=.*[a-zA-Z])(?=.*\d)').hasMatch(value)) {
+      return '비밀번호는 영문과 숫자를 포함해야 합니다';
+    }
+    return null;
+  }
+
+  String? _validateConfirmPassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return '비밀번호 확인을 입력해주세요';
+    }
+    if (value != _passwordController.text) {
+      return '비밀번호가 일치하지 않습니다';
+    }
+    return null;
+  }
+
+  String? _validateNickname(String? value) {
+    if (value == null || value.isEmpty) {
+      return '닉네임을 입력해주세요';
+    }
+    if (value.length < 2) {
+      return '닉네임은 2자 이상이어야 합니다';
+    }
+    if (value.length > 10) {
+      return '닉네임은 10자 이하여야 합니다';
+    }
+    return null;
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        setState(() {
+          _selectedImage = File(image.path);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('이미지 선택 중 오류가 발생했습니다')));
+    }
+  }
+
+  Future<void> _takePhoto() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        setState(() {
+          _selectedImage = File(image.path);
+        });
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('사진 촬영 중 오류가 발생했습니다')));
+    }
+  }
+
+  void _showImagePickerDialog() {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                '프로필 이미지 선택',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _ImagePickerOption(
+                    icon: Icons.camera_alt,
+                    label: '카메라',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _takePhoto();
+                    },
+                  ),
+                  _ImagePickerOption(
+                    icon: Icons.photo_library,
+                    label: '갤러리',
+                    onTap: () {
+                      Navigator.pop(context);
+                      _pickImage();
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleSignup() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        // TODO: 회원가입 API 호출
+        // POST /api/users/signup
+        // {
+        //   "email": _emailController.text,
+        //   "password": _passwordController.text,
+        //   "nickname": _nicknameController.text,
+        //   "profileImage": _selectedImage (multipart/form-data)
+        // }
+
+        // 임시 딜레이 (실제 API 호출 시 제거)
+        await Future.delayed(const Duration(seconds: 2));
+
+        // 성공 시 로그인 화면으로 이동
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('회원가입이 완료되었습니다!')));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('회원가입 중 오류가 발생했습니다: $e')));
+        }
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +247,7 @@ class SignupScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      '',
+                      '회원가입',
                       style: GoogleFonts.jua(
                         fontSize: 28,
                         color: AppColors.textPrimary,
@@ -56,33 +259,67 @@ class SignupScreen extends StatelessWidget {
                       duration: const Duration(milliseconds: 600),
                       curve: Curves.easeOutCubic,
                       child: _GlassCard(
-                        child: Column(
-                          children: [
-                            _IconInputField(
-                              hintText: '아이디/이메일 입력',
-                              keyboardType: TextInputType.emailAddress,
-                              icon: Icons.email_outlined,
-                            ),
-                            const SizedBox(height: 12),
-                            _IconInputField(
-                              hintText: '비밀번호 입력',
-                              obscureText: true,
-                              icon: Icons.lock_outline,
-                            ),
-                            const SizedBox(height: 12),
-                            _IconInputField(
-                              hintText: '비밀번호 확인',
-                              obscureText: true,
-                              icon: Icons.lock_reset,
-                            ),
-                            const SizedBox(height: 16),
-                            _PrimaryButton(
-                              text: '회원가입',
-                              onTap: () {
-                                // TODO: 회원가입 로직
-                              },
-                            ),
-                          ],
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            children: [
+                              // 프로필 이미지 선택
+                              _ProfileImageSelector(
+                                selectedImage: _selectedImage,
+                                onTap: _showImagePickerDialog,
+                              ),
+                              const SizedBox(height: 20),
+
+                              // 닉네임 입력
+                              _IconInputField(
+                                hintText: '닉네임 입력 (2-10자)',
+                                keyboardType: TextInputType.text,
+                                icon: Icons.person_outline,
+                                controller: _nicknameController,
+                                validator: _validateNickname,
+                              ),
+                              const SizedBox(height: 12),
+
+                              // 이메일 입력
+                              _IconInputField(
+                                hintText: '이메일 입력',
+                                keyboardType: TextInputType.emailAddress,
+                                icon: Icons.email_outlined,
+                                controller: _emailController,
+                                validator: _validateEmail,
+                              ),
+                              const SizedBox(height: 12),
+
+                              // 비밀번호 입력
+                              _IconInputField(
+                                hintText: '비밀번호 입력 (영문+숫자 6자 이상)',
+                                obscureText: true,
+                                icon: Icons.lock_outline,
+                                controller: _passwordController,
+                                validator: _validatePassword,
+                              ),
+                              const SizedBox(height: 12),
+
+                              // 비밀번호 확인
+                              _IconInputField(
+                                hintText: '비밀번호 확인',
+                                obscureText: true,
+                                icon: Icons.lock_reset,
+                                controller: _confirmPasswordController,
+                                validator: _validateConfirmPassword,
+                              ),
+                              const SizedBox(height: 20),
+
+                              // 회원가입 버튼
+                              _PrimaryButton(
+                                text: _isLoading ? '가입 중...' : '회원가입',
+                                onTap: _isLoading
+                                    ? () {}
+                                    : () => _handleSignup(),
+                                isLoading: _isLoading,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       builder: (context, value, child) {
@@ -132,7 +369,6 @@ class SignupScreen extends StatelessWidget {
   }
 }
 
-// 기존 _Logo 대신 폴라로이드 스택 사용
 class _Logo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -189,12 +425,18 @@ class _IconInputField extends StatefulWidget {
   final bool obscureText;
   final TextInputType? keyboardType;
   final IconData icon;
+  final String? Function(String?)? validator;
+  final void Function(String)? onChanged;
+  final TextEditingController? controller;
 
   const _IconInputField({
     required this.hintText,
     required this.icon,
     this.obscureText = false,
     this.keyboardType,
+    this.validator,
+    this.onChanged,
+    this.controller,
   });
 
   @override
@@ -220,10 +462,13 @@ class _IconInputFieldState extends State<_IconInputField> {
   @override
   Widget build(BuildContext context) {
     final bool isFocused = _focusNode.hasFocus;
-    return TextField(
+    return TextFormField(
+      controller: widget.controller,
       focusNode: _focusNode,
       obscureText: widget.obscureText,
       keyboardType: widget.keyboardType,
+      validator: widget.validator,
+      onChanged: widget.onChanged,
       decoration: InputDecoration(
         isDense: true,
         prefixIcon: Icon(widget.icon, size: 20, color: AppColors.textSecondary),
@@ -244,6 +489,15 @@ class _IconInputFieldState extends State<_IconInputField> {
           borderRadius: BorderRadius.all(Radius.circular(12)),
           borderSide: BorderSide(color: AppColors.primary, width: 1.4),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.red, width: 1.4),
+        ),
+        errorStyle: const TextStyle(color: Colors.red, fontSize: 12),
       ),
     );
   }
@@ -252,8 +506,13 @@ class _IconInputFieldState extends State<_IconInputField> {
 class _PrimaryButton extends StatelessWidget {
   final String text;
   final VoidCallback onTap;
+  final bool isLoading;
 
-  const _PrimaryButton({required this.text, required this.onTap});
+  const _PrimaryButton({
+    required this.text,
+    required this.onTap,
+    required this.isLoading,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -280,21 +539,115 @@ class _PrimaryButton extends StatelessWidget {
             ),
           ],
         ),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 15,
-          ),
-        ),
+        child: isLoading
+            ? const SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  strokeWidth: 2,
+                ),
+              )
+            : Text(
+                text,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
       ),
     );
   }
 }
 
-// _SocialButton 제거됨 (소셜 로그인 버튼 미사용)
+class _ProfileImageSelector extends StatelessWidget {
+  final File? selectedImage;
+  final VoidCallback onTap;
+
+  const _ProfileImageSelector({
+    required this.selectedImage,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.grey[200],
+              border: Border.all(color: AppColors.primary, width: 2),
+            ),
+            child: selectedImage != null
+                ? ClipOval(
+                    child: Image.file(
+                      selectedImage!,
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : const Icon(
+                    Icons.person,
+                    size: 50,
+                    color: AppColors.textSecondary,
+                  ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '프로필 이미지 선택',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImagePickerOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ImagePickerOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 30),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _SkyBackground extends StatelessWidget {
   const _SkyBackground();
