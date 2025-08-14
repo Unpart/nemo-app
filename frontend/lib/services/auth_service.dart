@@ -12,6 +12,8 @@ class AuthService {
   // JWT 토큰 저장소
   static String? _accessToken;
 
+  static String? get accessToken => _accessToken;
+
   // JWT 토큰 설정
   static void setAccessToken(String token) {
     _accessToken = token;

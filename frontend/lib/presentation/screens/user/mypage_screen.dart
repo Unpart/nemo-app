@@ -18,6 +18,12 @@ import 'widgets/profile_card.dart';
 import 'widgets/account_actions_card.dart';
 import 'widgets/profile_image_picker_sheet.dart';
 import 'widgets/sky_background.dart';
+import 'package:http/http.dart' as http;
+import 'dart:typed_data';
+// ignore: depend_on_referenced_packages
+import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:frontend/services/photo_upload_api.dart';
 
 class MyPageScreen extends StatefulWidget {
   const MyPageScreen({super.key});
@@ -145,18 +151,60 @@ class _MyPageScreenState extends State<MyPageScreen> {
     );
   }
 
-  String? _validateNickname(String? value) {
-    if (value == null || value.isEmpty) {
-      return '닉네임을 입력해주세요';
+  // QR 스캔 진입은 하단 탭에서 제공되며, 마이페이지에서는 제거되었습니다.
+
+  // QR 가져오기는 현재 마이페이지에서 직접 호출하지 않습니다. (탭 구조 적용)
+  // ignore: unused_element
+  Future<void> _importFromQr(String payload) async {
+    final match = RegExp(r'https?://[^\s]+').firstMatch(payload);
+    if (match == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('지원되지 않는 QR 형식입니다.')));
+      return;
     }
-    if (value.length < 2) {
-      return '닉네임은 2자 이상이어야 합니다';
+    final url = match.group(0)!;
+
+    try {
+      final resp = await http.get(Uri.parse(url));
+      if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty) {
+        final Uint8List bytes = resp.bodyBytes;
+        if (!mounted) return;
+        final tempDir = Directory.systemTemp;
+        final fileName =
+            'qr_photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final filePath = p.join(tempDir.path, fileName);
+        final file = await File(filePath).writeAsBytes(bytes);
+
+        final nowIso = DateFormat("yyyy-MM-ddTHH:mm:ss").format(DateTime.now());
+        final api = PhotoUploadApi();
+        final result = await api.uploadPhotoViaQr(
+          qrCode: payload,
+          imageFile: file,
+          takenAtIso: nowIso,
+          location: '포토부스(추정)',
+          brand: '인생네컷',
+          tagList: const ['QR업로드'],
+          friendIdList: const [],
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('업로드 완료 (ID: ${result['photoId']})')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('이미지를 불러오지 못했습니다 (${resp.statusCode})')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('가져오기 실패: $e')));
     }
-    if (value.length > 10) {
-      return '닉네임은 10자 이하여야 합니다';
-    }
-    return null;
   }
+
+  // 닉네임 검증은 ProfileCard 내부에서 처리하므로 이 화면에서는 미사용 상태입니다.
 
   Future<void> _updateUserInfo() async {
     if (!_formKey.currentState!.validate()) return;
@@ -572,6 +620,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final bool isSmallHeight = size.height < 720;
+    final double outerVertical = isSmallHeight ? 16 : 32;
+    final double gap = isSmallHeight ? 12 : 20;
+    final double innerGap = isSmallHeight ? 8 : 12;
     return Scaffold(
       body: Stack(
         children: [
@@ -580,34 +633,26 @@ class _MyPageScreenState extends State<MyPageScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 32,
+                    padding: EdgeInsets.fromLTRB(
+                      24,
+                      outerVertical,
+                      24,
+                      outerVertical + 16,
                     ),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         // 헤더
-                        Row(
-                          children: [
-                            IconButton(
-                              onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.arrow_back_ios),
+                        Center(
+                          child: Text(
+                            '마이페이지',
+                            style: GoogleFonts.jua(
+                              fontSize: 24,
                               color: AppColors.textPrimary,
                             ),
-                            Expanded(
-                              child: Text(
-                                '마이페이지',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.jua(
-                                  fontSize: 24,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 48), // 균형 맞추기
-                          ],
+                          ),
                         ),
-                        const SizedBox(height: 20),
+                        SizedBox(height: gap),
 
                         // 프로필 섹션 (분리 위젯 사용)
                         ProfileCard(
@@ -626,7 +671,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                           onSave: _updateUserInfo,
                           onOpenImagePicker: _showImagePickerDialog,
                         ),
-                        const SizedBox(height: 20),
+                        SizedBox(height: gap),
 
                         // 계정 정보
                         GlassCard(
@@ -641,13 +686,13 @@ class _MyPageScreenState extends State<MyPageScreen> {
                                   color: AppColors.textPrimary,
                                 ),
                               ),
-                              const SizedBox(height: 16),
+                              SizedBox(height: isSmallHeight ? 10 : 16),
                               InfoRow(
                                 label: '가입일',
                                 value: _userInfo['createdAt'],
                                 icon: Icons.calendar_today,
                               ),
-                              const SizedBox(height: 12),
+                              SizedBox(height: innerGap),
                               InfoRow(
                                 label: '이메일',
                                 value: _userInfo['email'],
@@ -656,7 +701,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 20),
+                        SizedBox(height: gap),
 
                         // 계정 관리
                         AccountActionsCard(

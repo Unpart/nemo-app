@@ -8,7 +8,7 @@ import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/providers/user_provider.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
-import '../user/mypage_screen.dart';
+import '../main_shell.dart';
 import 'widgets/login_background.dart';
 import 'widgets/login_logo.dart';
 import 'widgets/email_login_form.dart';
@@ -79,16 +79,14 @@ class LoginScreen extends StatelessWidget {
                       },
                     ),
                     const SizedBox(height: 24),
-                    // 임시 마이페이지 버튼 (나중에 제거 예정)
+                    // 임시: 앱 메인 쉘로 진입 (하단 네비 포함)
                     _AnimatedPrimaryButton(
-                      text: '마이페이지 (임시)',
+                      text: '앱 들어가기 (임시)',
                       gradientColors: const [Colors.orange, Colors.deepOrange],
                       onTap: () {
-                        Navigator.push(
+                        Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(
-                            builder: (_) => const MyPageScreen(),
-                          ),
+                          MaterialPageRoute(builder: (_) => const MainShell()),
                         );
                       },
                     ),
