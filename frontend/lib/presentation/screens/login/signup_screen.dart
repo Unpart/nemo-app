@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'login_screen.dart';
 import 'widgets/email_verification_section.dart';
 import 'package:frontend/services/auth_service.dart';
+import 'signup_form_model.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -47,7 +48,8 @@ class _SignupScreenState extends State<SignupScreen> {
     if (value == null || value.isEmpty) {
       return '이메일을 입력해주세요';
     }
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}\$');
+    // 간단하고 표준적인 이메일 정규식 (문자열 끝은 $ 로 마감)
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
     if (!emailRegex.hasMatch(value)) {
       return '올바른 이메일 형식을 입력해주세요';
     }
@@ -58,11 +60,16 @@ class _SignupScreenState extends State<SignupScreen> {
     if (value == null || value.isEmpty) {
       return '비밀번호를 입력해주세요';
     }
-    if (value.length < 6) {
-      return '비밀번호는 6자 이상이어야 합니다';
+    // 명세: 최소 8자, 특수문자 포함. 또한 영문과 숫자 포함을 권장
+    if (value.length < 8) {
+      return '비밀번호는 최소 8자 이상이어야 합니다';
     }
-    if (!RegExp(r'^(?=.*[a-zA-Z])(?=.*\d)').hasMatch(value)) {
-      return '비밀번호는 영문과 숫자를 포함해야 합니다';
+    // 하나 이상의 영문, 숫자, 특수문자 포함 체크
+    final hasLetter = RegExp(r'[A-Za-z]').hasMatch(value);
+    final hasDigit = RegExp(r'\d').hasMatch(value);
+    final hasSpecial = RegExp(r'[^A-Za-z0-9]').hasMatch(value);
+    if (!(hasLetter && hasDigit && hasSpecial)) {
+      return '영문, 숫자, 특수문자를 각각 1자 이상 포함해야 합니다';
     }
     return null;
   }
@@ -265,20 +272,16 @@ class _SignupScreenState extends State<SignupScreen> {
     });
 
     try {
-      // TODO: 회원가입 API 호출 (이메일 인증 완료 상태 전제)
-      // POST /api/users/signup
-      // {
-      //   "email": _emailController.text,
-      //   "password": _passwordController.text,
-      //   "nickname": _nicknameController.text,
-      //   "profileImage": _selectedImage (multipart/form-data)
-      // }
+      // 명세에 맞춘 회원가입 API 호출
+      final ok = await AuthService().signup(
+        SignupFormModel(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+          nickname: _nicknameController.text.trim(),
+        ),
+      );
 
-      // 임시 딜레이 (실제 API 호출 시 제거)
-      await Future.delayed(const Duration(seconds: 2));
-
-      // 성공 시 로그인 화면으로 이동
-      if (mounted) {
+      if (mounted && ok) {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -387,7 +390,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                               // 비밀번호 입력
                               _IconInputField(
-                                hintText: '비밀번호 입력 (영문+숫자 6자 이상)',
+                                hintText: '비밀번호 입력 (영문+숫자+특수문자, 8자 이상)',
                                 obscureText: true,
                                 icon: Icons.lock_outline,
                                 controller: _passwordController,

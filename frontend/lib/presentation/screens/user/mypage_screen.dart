@@ -11,13 +11,10 @@ import '../login/login_screen.dart';
 
 // 위젯 imports
 import 'widgets/glass_card.dart';
-import 'widgets/icon_input_field.dart';
-import 'widgets/primary_button.dart';
-import 'widgets/secondary_button.dart';
+// removed unused: icon_input_field, primary/secondary button (moved into widgets)
 import 'widgets/info_row.dart';
-import 'widgets/menu_button.dart';
+// removed unused: menu_button
 import 'widgets/profile_card.dart';
-import 'widgets/account_info_card.dart';
 import 'widgets/account_actions_card.dart';
 import 'widgets/profile_image_picker_sheet.dart';
 import 'widgets/sky_background.dart';
@@ -290,80 +287,98 @@ class _MyPageScreenState extends State<MyPageScreen> {
     final showWarning = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text(
-            '회원탈퇴 안내',
-            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        return Theme(
+          data: Theme.of(context).copyWith(
+            textTheme: GoogleFonts.notoSansTextTheme(
+              Theme.of(context).textTheme,
+            ),
+            // Use default dialogTheme; apply font via textTheme above
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  '회원탈퇴 시 다음 데이터가 영구적으로 삭제됩니다:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                _buildWarningItem('• 개인 정보 (이메일, 닉네임, 프로필 이미지)'),
-                _buildWarningItem('• 모든 리캡 카드와 앨범'),
-                _buildWarningItem('• 업로드된 사진들'),
-                _buildWarningItem('• 친구 목록 및 관계'),
-                _buildWarningItem('• 앱 사용 기록'),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.red.withValues(alpha: 0.3),
+          child: AlertDialog(
+            title: const Text(
+              '회원탈퇴 안내',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '회원탈퇴 시 다음 데이터가 영구적으로 삭제됩니다:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      height: 1.4,
                     ),
                   ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.warning, color: Colors.red, size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '탈퇴 후에는 복구가 불가능합니다!',
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                  const SizedBox(height: 12),
+                  _buildWarningItem('• 개인 정보 (이메일, 닉네임, 프로필 이미지)'),
+                  _buildWarningItem('• 모든 리캡 카드와 앨범'),
+                  _buildWarningItem('• 업로드된 사진들'),
+                  _buildWarningItem('• 친구 목록 및 관계'),
+                  _buildWarningItem('• 앱 사용 기록'),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Colors.red.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.red,
+                          size: 20,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '탈퇴 후에는 복구가 불가능합니다!',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              height: 1.3,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  '중요한 사진이나 앨범이 있다면\n먼저 백업하시는 것을 권장합니다.',
-                  style: TextStyle(
-                    color: Colors.orange,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13,
+                  const SizedBox(height: 16),
+                  const Text(
+                    '중요한 사진이나 앨범이 있다면 먼저 백업하시기를 권장합니다.',
+                    style: TextStyle(
+                      color: Color.fromARGB(255, 255, 153, 0),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13.5,
+                      height: 1.4,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  if (mounted) {
+                    Navigator.of(context).pop(false);
+                  }
+                },
+                child: const Text('취소'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('탈퇴 진행'),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                if (mounted) {
-                  Navigator.of(context).pop(false);
-                }
-              },
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('탈퇴 진행'),
-            ),
-          ],
         );
       },
     );
@@ -376,56 +391,64 @@ class _MyPageScreenState extends State<MyPageScreen> {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text(
-            '비밀번호 확인',
-            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        return Theme(
+          data: Theme.of(context).copyWith(
+            textTheme: GoogleFonts.notoSansTextTheme(
+              Theme.of(context).textTheme,
+            ),
+            // Use default dialogTheme
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '회원탈퇴를 위해\n현재 비밀번호를 입력해주세요.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: '비밀번호',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock_outline),
+          child: AlertDialog(
+            title: const Text(
+              '비밀번호 확인',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  '회원탈퇴를 위해\n현재 비밀번호를 입력해주세요.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14),
                 ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return '비밀번호를 입력해주세요';
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: '비밀번호',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.lock_outline),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return '비밀번호를 입력해주세요';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  if (mounted) {
+                    Navigator.of(dialogContext).pop(false);
                   }
-                  return null;
                 },
+                child: const Text('취소'),
+              ),
+              TextButton(
+                onPressed: () {
+                  if (passwordController.text.isNotEmpty && mounted) {
+                    Navigator.of(dialogContext).pop(true);
+                  }
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('탈퇴 확인'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                if (mounted) {
-                  Navigator.of(dialogContext).pop(false);
-                }
-              },
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () {
-                if (passwordController.text.isNotEmpty && mounted) {
-                  Navigator.of(dialogContext).pop(true);
-                }
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('탈퇴 확인'),
-            ),
-          ],
         );
       },
     );
@@ -437,48 +460,56 @@ class _MyPageScreenState extends State<MyPageScreen> {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          title: const Text(
-            '최종 확인',
-            style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+        return Theme(
+          data: Theme.of(context).copyWith(
+            textTheme: GoogleFonts.notoSansTextTheme(
+              Theme.of(context).textTheme,
+            ),
+            // Use default dialogTheme
           ),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 48),
-              SizedBox(height: 16),
-              Text(
-                '정말로 회원탈퇴를 진행하시겠습니까?',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          child: AlertDialog(
+            title: const Text(
+              '최종 확인',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+            content: const Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.red, size: 48),
+                SizedBox(height: 16),
+                Text(
+                  '정말로 회원탈퇴를 진행하시겠습니까?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '이 작업은 되돌릴 수 없습니다.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 14, color: Colors.red),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  if (mounted) {
+                    Navigator.of(dialogContext).pop(false);
+                  }
+                },
+                child: const Text('취소'),
               ),
-              SizedBox(height: 8),
-              Text(
-                '이 작업은 되돌릴 수 없습니다.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.red),
+              TextButton(
+                onPressed: () {
+                  if (mounted) {
+                    Navigator.of(dialogContext).pop(true);
+                  }
+                },
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('탈퇴 완료'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                if (mounted) {
-                  Navigator.of(dialogContext).pop(false);
-                }
-              },
-              child: const Text('취소'),
-            ),
-            TextButton(
-              onPressed: () {
-                if (mounted) {
-                  Navigator.of(dialogContext).pop(true);
-                }
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('탈퇴 완료'),
-            ),
-          ],
         );
       },
     );

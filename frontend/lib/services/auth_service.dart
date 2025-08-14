@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../presentation/screens/login/signup_form_model.dart';
+import '../app/constants.dart';
 
 class AuthService {
   // ✅ 서버 URL 설정 (로컬 or 배포 서버로 교체해야 함)
@@ -31,6 +33,26 @@ class AuthService {
 
   /// 로그인 요청
   Future<Map<String, dynamic>> login(String email, String password) async {
+    if (AppConstants.useMockApi) {
+      // 모킹 응답
+      await Future.delayed(
+        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
+      );
+      // 간단 검증
+      if (email.isEmpty || password.isEmpty) {
+        throw Exception('이메일 또는 비밀번호가 올바르지 않습니다.');
+      }
+      final mockToken =
+          'mock_access_token_${DateTime.now().millisecondsSinceEpoch}';
+      setAccessToken(mockToken);
+      return {
+        'success': true,
+        'accessToken': mockToken,
+        'userId': 1,
+        'nickname': '네컷러버',
+        'profileImageUrl': null,
+      };
+    }
     final uri = Uri.parse('$baseUrl/api/auth/login');
 
     try {
@@ -66,13 +88,41 @@ class AuthService {
 
   /// 회원가입 요청
   Future<bool> signup(SignupFormModel form) async {
+    if (AppConstants.useMockApi) {
+      await Future.delayed(
+        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
+      );
+      // 간단한 중복 이메일/유효성 모의 검증
+      if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(form.email)) {
+        throw Exception('올바른 이메일 형식을 입력해주세요');
+      }
+      if (form.password.length < 8 ||
+          !RegExp(r'[A-Za-z]').hasMatch(form.password) ||
+          !RegExp(r'\d').hasMatch(form.password) ||
+          !RegExp(r'[^A-Za-z0-9]').hasMatch(form.password)) {
+        throw Exception('비밀번호는 영문, 숫자, 특수문자를 포함해 8자 이상이어야 합니다.');
+      }
+      if (form.nickname.trim().isEmpty) {
+        throw Exception('닉네임을 입력해주세요');
+      }
+      // 중복 이메일 더미 체크
+      if (form.email.toLowerCase() == 'exists@example.com') {
+        throw Exception('이미 존재하는 이메일입니다.');
+      }
+      return true;
+    }
     final uri = Uri.parse('$baseUrl/api/users/signup');
 
     try {
       final response = await http.post(
         uri,
         headers: _getHeaders(includeAuth: false),
-        body: jsonEncode(form.toJson()),
+        // 명세에 맞춰 3개 필드만 전송
+        body: jsonEncode({
+          'email': form.email,
+          'password': form.password,
+          'nickname': form.nickname,
+        }),
       );
 
       if (response.statusCode == 201) {
@@ -93,6 +143,12 @@ class AuthService {
 
   /// 이메일 인증 메일 발송
   Future<void> sendEmailVerification(String email) async {
+    if (AppConstants.useMockApi) {
+      await Future.delayed(
+        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
+      );
+      return;
+    }
     final uri = Uri.parse('$baseUrl/api/auth/email/verification/send');
     try {
       final response = await http.post(
@@ -123,6 +179,15 @@ class AuthService {
     required String email,
     required String code,
   }) async {
+    if (AppConstants.useMockApi) {
+      await Future.delayed(
+        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
+      );
+      if (code.trim() != '123456') {
+        throw Exception('인증 코드가 올바르지 않습니다.');
+      }
+      return true;
+    }
     final uri = Uri.parse('$baseUrl/api/auth/email/verification/confirm');
     try {
       final response = await http.post(
@@ -145,6 +210,21 @@ class AuthService {
 
   /// 사용자 정보 조회 (JWT 토큰 필요)
   Future<Map<String, dynamic>> getUserInfo() async {
+    if (AppConstants.useMockApi) {
+      await Future.delayed(
+        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
+      );
+      if (_accessToken == null) {
+        throw Exception('인증이 필요합니다.');
+      }
+      return {
+        'userId': 1,
+        'email': 'user@example.com',
+        'nickname': '네컷러버',
+        'profileImageUrl': null,
+        'createdAt': DateTime.now().toIso8601String(),
+      };
+    }
     final uri = Uri.parse('$baseUrl/api/users/me');
 
     try {
@@ -164,6 +244,13 @@ class AuthService {
 
   /// 로그아웃 (JWT 토큰 무효화)
   Future<bool> logout() async {
+    if (AppConstants.useMockApi) {
+      await Future.delayed(
+        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
+      );
+      clearAccessToken();
+      return true;
+    }
     final uri = Uri.parse('$baseUrl/api/users/logout');
 
     try {
@@ -183,6 +270,16 @@ class AuthService {
 
   /// 회원탈퇴 (비밀번호 확인 필요)
   Future<bool> deleteAccount(String password) async {
+    if (AppConstants.useMockApi) {
+      await Future.delayed(
+        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
+      );
+      if (password.isEmpty) {
+        throw Exception('비밀번호가 올바르지 않습니다.');
+      }
+      clearAccessToken();
+      return true;
+    }
     final uri = Uri.parse('$baseUrl/api/users/me');
 
     try {
