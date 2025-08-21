@@ -19,6 +19,9 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   double _zoom = 1.0; // 1.0 ~ 1.x (controller 내부 스케일로 전달)
   double _zoomBaseOnPinch = 1.0;
   bool _isPinching = false;
+  bool _isSwitching = false;
+  bool _isDisposed = false;
+  DateTime? _lastZoomAppliedAt;
 
   @override
   void initState() {
@@ -34,11 +37,13 @@ class _QrScannerScreenState extends State<QrScannerScreen>
 
   @override
   void dispose() {
+    _isDisposed = true;
     _controller.dispose();
     super.dispose();
   }
 
   Future<void> _toggleTorch() async {
+    if (_isDisposed || _isSwitching) return;
     try {
       await _controller.toggleTorch();
       final state = _controller.torchState.value;
@@ -48,9 +53,13 @@ class _QrScannerScreenState extends State<QrScannerScreen>
 
   Future<void> _switchCamera() async {
     try {
+      _isSwitching = true;
       await _controller.switchCamera();
       if (mounted) setState(() => _isBackCamera = !_isBackCamera);
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _isSwitching = false;
+    }
   }
 
   Future<void> _openGalleryAndScan() async {
@@ -78,15 +87,13 @@ class _QrScannerScreenState extends State<QrScannerScreen>
   }
 
   void _onDetect(BarcodeCapture capture) {
-    if (_isHandling) return;
+    if (_isHandling || _isSwitching) return;
     final codes = capture.barcodes;
     if (codes.isEmpty) return;
     final value = codes.first.rawValue;
     if (value == null || value.isEmpty) return;
     _isHandling = true;
-    if (mounted) {
-      Navigator.pop(context, value);
-    }
+    if (mounted) Navigator.pop(context, value);
   }
 
   @override
@@ -106,6 +113,7 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                   }
                 },
                 onScaleUpdate: (details) async {
+                  if (_isDisposed || _isSwitching) return;
                   if (!_isPinching || details.pointerCount < 2) return;
                   // 핀치 배율을 현재 줌에 곱해 반영 (1.0~4.0)
                   final next = (_zoomBaseOnPinch * details.scale).clamp(
@@ -116,8 +124,17 @@ class _QrScannerScreenState extends State<QrScannerScreen>
                   _zoom = next;
                   try {
                     // 1.0~4.0 -> 0.0~1.0 선형 매핑
-                    final scale = ((_zoom - 1.0) / 3.0).clamp(0.0, 1.0);
-                    await _controller.setZoomScale(scale.toDouble());
+                    final scale = ((_zoom - 1.0) / 3.0)
+                        .clamp(0.0, 1.0)
+                        .toDouble();
+                    // 호출 쓰로틀링(약 40ms)
+                    final now = DateTime.now();
+                    if (_lastZoomAppliedAt == null ||
+                        now.difference(_lastZoomAppliedAt!) >
+                            const Duration(milliseconds: 40)) {
+                      _lastZoomAppliedAt = now;
+                      await _controller.setZoomScale(scale);
+                    }
                   } catch (_) {}
                 },
                 onScaleEnd: (_) {

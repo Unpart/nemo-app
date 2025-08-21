@@ -8,7 +8,7 @@ class AppColors {
 
   // ## 주요 색상 (Primary Colors) — 파스텔 하늘색 톤
   static const Color primary = Color(0xFF76BDF2); // 메인 액션 파스텔 블루
-  static const Color secondary = Color(0xFFE7EEFC); // 아주 연한 하늘톤 배경
+  static const Color secondary = Color(0xFFE7EEFC); // 아주 연한 하늘톤 배경 (하단바 배경)
   static const Color accent = Color(0xFF9AD7FF); // 포커스/포인트
 
   // 파스텔 스카이 그라디언트 팔레트

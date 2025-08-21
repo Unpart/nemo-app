@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:frontend/app/theme/app_colors.dart';
 import 'user/mypage_screen.dart';
 import 'qr/qr_scanner_screen.dart';
+import 'package:frontend/utils/qr_import.dart';
+import 'photo/photo_list_screen.dart';
 
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -15,7 +17,7 @@ class _MainShellState extends State<MainShell> {
 
   final List<Widget> _pages = const [
     _PlaceholderScreen(title: '홈'),
-    _PlaceholderScreen(title: '앨범 관리'),
+    PhotoListScreen(),
     _PlaceholderScreen(title: 'QR 스캔'), // 눌렀을 때 별도 화면 push
     _PlaceholderScreen(title: '공유 및 친구'),
     MyPageScreen(),
@@ -23,11 +25,15 @@ class _MainShellState extends State<MainShell> {
 
   Future<void> _onNavTap(int index) async {
     if (index == 2) {
-      // QR 스캔은 별도 전체 화면으로 푸시
-      await Navigator.push(
+      // QR 스캔은 별도 전체 화면으로 푸시하고, 결과를 업로드로 연결
+      final result = await Navigator.push<String>(
         context,
         MaterialPageRoute(builder: (_) => const QrScannerScreen()),
       );
+      if (!mounted) return;
+      if (result != null && result.isNotEmpty) {
+        await handleQrImport(context, result);
+      }
       return;
     }
     setState(() => _currentIndex = index);
@@ -35,11 +41,14 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final navBg = AppColors.secondary; // 연한 블루 배경
     return Scaffold(
       body: _pages[_currentIndex],
       bottomNavigationBar: NavigationBar(
+        backgroundColor: navBg,
+        elevation: 0,
         selectedIndex: _currentIndex,
-        indicatorColor: AppColors.primary.withValues(alpha: 0.12),
+        indicatorColor: AppColors.primary.withValues(alpha: 0.14),
         onDestinationSelected: _onNavTap,
         destinations: const [
           NavigationDestination(

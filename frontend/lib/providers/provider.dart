@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'user_provider.dart';
+import 'photo_provider.dart';
 
 final List<ChangeNotifierProvider> globalProviders = [
   ChangeNotifierProvider<UserProvider>(create: (_) => UserProvider()),
+  ChangeNotifierProvider<PhotoProvider>(create: (_) => PhotoProvider()),
 ];
 
 class AppProviders extends StatelessWidget {

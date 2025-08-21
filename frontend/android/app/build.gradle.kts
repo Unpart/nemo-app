@@ -7,7 +7,8 @@ plugins {
 
 android {
     namespace = "com.example.frontend"
-    compileSdk = flutter.compileSdkVersion
+    // Override Flutter's default to compile against Android 36
+    compileSdk = 36
     ndkVersion =  "27.0.12077973"
 
     compileOptions {

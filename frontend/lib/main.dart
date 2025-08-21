@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart'; // ✅ 폰트 적용을 위해 import
 import 'app/theme/app_colors.dart'; // ✅ 색상 테마 적용을 위해 import
 import 'presentation/screens/login/login_screen.dart';
-import 'presentation/screens/main_shell.dart';
 import 'providers/provider.dart';
 
 void main() async {
@@ -33,9 +32,15 @@ class NemoApp extends StatelessWidget {
             Theme.of(context).textTheme,
           ),
           appBarTheme: const AppBarTheme(
-            backgroundColor: AppColors.background,
+            backgroundColor: AppColors.secondary,
             elevation: 0,
             foregroundColor: AppColors.textPrimary,
+            centerTitle: true,
+            titleTextStyle: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+              color: AppColors.textPrimary,
+            ),
           ),
         ),
 
