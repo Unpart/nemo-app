@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/providers/photo_provider.dart';
 import 'photo_viewer_screen.dart';
+import 'package:frontend/presentation/screens/album/create_album_screen.dart';
+import 'package:frontend/presentation/screens/album/select_album_photos_screen.dart';
+import 'package:frontend/providers/album_provider.dart';
+import 'package:frontend/presentation/screens/album/album_detail_screen.dart';
 
 class PhotoListScreen extends StatefulWidget {
   const PhotoListScreen({super.key});
@@ -38,6 +42,40 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
           isAlbums: _showAlbums,
           onChanged: (isAlbums) => setState(() => _showAlbums = isAlbums),
         ),
+        actions: [
+          if (_showAlbums)
+            IconButton(
+              icon: const Icon(Icons.add),
+              tooltip: '새 앨범',
+              onPressed: () async {
+                // 1) 사진 먼저 선택
+                final selected = await Navigator.push<List<int>>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const SelectAlbumPhotosScreen(),
+                  ),
+                );
+                if (!mounted) return;
+                // 선택이 없으면 취소
+                if (selected == null) return;
+
+                // 2) 제목/설명 입력
+                final created = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        CreateAlbumScreenInitial(selectedPhotoIds: selected),
+                  ),
+                );
+                if (!mounted) return;
+                if (created != null) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('앨범이 생성되었습니다.')));
+                }
+              },
+            ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -49,7 +87,7 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
                   items.isEmpty
                       ? const _EmptyState()
                       : (_showAlbums
-                            ? _AlbumGrid(items: items)
+                            ? const _AlbumListGrid()
                             : NotificationListener<ScrollNotification>(
                                 onNotification: (n) {
                                   if (n.metrics.pixels >=
@@ -340,36 +378,39 @@ class _DeleteButtonState extends State<_DeleteButton> {
   }
 }
 
-class _AlbumGrid extends StatelessWidget {
-  final List<PhotoItem> items;
-  final VoidCallback? onOpenFavorites;
-  const _AlbumGrid({required this.items, this.onOpenFavorites});
+class _AlbumListGrid extends StatelessWidget {
+  const _AlbumListGrid();
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, List<PhotoItem>> byBrand = {};
-    for (final p in items) {
-      byBrand.putIfAbsent(p.brand.isEmpty ? '기타' : p.brand, () => []).add(p);
+    final provider = context.watch<AlbumProvider>();
+    if (provider.albums.isEmpty && !provider.isLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          context.read<AlbumProvider>().resetAndLoad();
+        }
+      });
     }
-    final albums = byBrand.entries.toList()
-      ..sort((a, b) => b.value.length.compareTo(a.value.length));
-    final favItems = items.where((e) => e.favorite).toList();
-    final favCount = favItems.length;
 
-    return GridView.builder(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        // 더 세로로 여유 있게 만들어 텍스트 영역 포함
-        childAspectRatio: 0.78,
-      ),
-      itemCount: albums.length + (favCount > 0 ? 1 : 0),
-      itemBuilder: (context, i) {
-        if (favCount > 0 && i == 0) {
-          final cover = favItems.first;
-          final isFile =
-              cover.imageUrl.isNotEmpty && !cover.imageUrl.startsWith('http');
+    return NotificationListener<ScrollNotification>(
+      onNotification: (n) {
+        if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
+          if (!provider.isLoading && provider.hasMore) {
+            provider.loadNextPage();
+          }
+        }
+        return false;
+      },
+      child: GridView.builder(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.78,
+        ),
+        itemCount: provider.albums.length,
+        itemBuilder: (_, i) {
+          final a = provider.albums[i];
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -379,18 +420,30 @@ class _AlbumGrid extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
-                    onTap: onOpenFavorites,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AlbumDetailScreen(albumId: a.albumId),
+                        ),
+                      );
+                    },
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: Stack(
                         children: [
                           Positioned.fill(
-                            child: _Thumb(
-                              imageUrl: cover.imageUrl,
-                              isFile: isFile,
-                            ),
+                            child: a.coverPhotoUrl != null
+                                ? Image.network(
+                                    a.coverPhotoUrl!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        const ColoredBox(
+                                          color: Color(0xFFE0E0E0),
+                                        ),
+                                  )
+                                : const ColoredBox(color: Color(0xFFE0E0E0)),
                           ),
-                          // inner bottom shadow (gradient)
                           Positioned(
                             left: 0,
                             right: 0,
@@ -413,92 +466,22 @@ class _AlbumGrid extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              const Text(
-                '즐겨찾기',
+              Text(
+                a.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.w600),
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               Text(
-                '${favCount}장',
+                '${a.photoCount}장',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.black54, fontSize: 12),
               ),
             ],
           );
-        }
-        final adj = favCount > 0 ? i - 1 : i;
-        final entry = albums[adj];
-        final cover = entry.value.first;
-        final isFile =
-            cover.imageUrl.isNotEmpty && !cover.imageUrl.startsWith('http');
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Material(
-                elevation: 2,
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          '앨범 "${entry.key}" (${entry.value.length})',
-                        ),
-                      ),
-                    );
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: _Thumb(
-                            imageUrl: cover.imageUrl,
-                            isFile: isFile,
-                          ),
-                        ),
-                        // inner bottom shadow
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          height: 56,
-                          child: Container(
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Colors.transparent, Colors.black26],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              entry.key,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            Text(
-              '${entry.value.length}장',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.black54, fontSize: 12),
-            ),
-          ],
-        );
-      },
+        },
+      ),
     );
   }
 }
