@@ -6,14 +6,18 @@ import 'package:provider/provider.dart';
 import 'package:frontend/providers/photo_provider.dart';
 import 'package:frontend/services/photo_api.dart';
 import 'photo_edit_screen.dart';
+import 'package:frontend/providers/album_provider.dart';
+import 'package:frontend/services/album_api.dart';
 
 class PhotoViewerScreen extends StatelessWidget {
   final int photoId;
   final String imageUrl;
+  final int? albumId; // 앨범에서 진입 시 앨범 ID 전달
   const PhotoViewerScreen({
     super.key,
     required this.photoId,
     required this.imageUrl,
+    this.albumId,
   });
 
   @override
@@ -147,7 +151,7 @@ class PhotoViewerScreen extends StatelessWidget {
                           },
                         ),
                         IconButton(
-                          tooltip: '삭제',
+                          tooltip: albumId != null ? '앨범에서 제거' : '삭제',
                           icon: const Icon(
                             Icons.delete_outline,
                             color: Colors.white,
@@ -156,8 +160,14 @@ class PhotoViewerScreen extends StatelessWidget {
                             final ok = await showDialog<bool>(
                               context: context,
                               builder: (_) => AlertDialog(
-                                title: const Text('사진 삭제'),
-                                content: const Text('정말 삭제하시겠습니까?'),
+                                title: Text(
+                                  albumId != null ? '앨범에서 제거' : '사진 삭제',
+                                ),
+                                content: Text(
+                                  albumId != null
+                                      ? '이 사진을 앨범에서 제거하시겠습니까?'
+                                      : '정말 삭제하시겠습니까?',
+                                ),
                                 actions: [
                                   TextButton(
                                     onPressed: () =>
@@ -167,29 +177,49 @@ class PhotoViewerScreen extends StatelessWidget {
                                   TextButton(
                                     onPressed: () =>
                                         Navigator.pop(context, true),
-                                    child: const Text('삭제'),
+                                    child: Text(albumId != null ? '제거' : '삭제'),
                                   ),
                                 ],
                               ),
                             );
                             if (ok == true && context.mounted) {
                               try {
-                                final api = PhotoApi();
-                                await api.deletePhoto(photoId);
-                                if (!context.mounted) return;
-                                context.read<PhotoProvider>().removeById(
-                                  photoId,
-                                );
+                                if (albumId != null) {
+                                  // 앨범에서 제거
+                                  // ignore: use_build_context_synchronously
+                                  await AlbumApi.removePhotos(
+                                    albumId: albumId!,
+                                    photoIds: [photoId],
+                                  );
+                                  if (!context.mounted) return;
+                                  // 앨범 상태만 수정
+                                  // ignore: use_build_context_synchronously
+                                  context.read<AlbumProvider>().removePhotos(
+                                    albumId!,
+                                    [photoId],
+                                  );
+                                } else {
+                                  final api = PhotoApi();
+                                  await api.deletePhoto(photoId);
+                                  if (!context.mounted) return;
+                                  context.read<PhotoProvider>().removeById(
+                                    photoId,
+                                  );
+                                }
                                 Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('사진이 성공적으로 삭제되었습니다.'),
+                                  SnackBar(
+                                    content: Text(
+                                      albumId != null
+                                          ? '앨범에서 제거했습니다.'
+                                          : '사진이 성공적으로 삭제되었습니다.',
+                                    ),
                                   ),
                                 );
                               } catch (e) {
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('삭제 실패: $e')),
+                                    SnackBar(content: Text('실패: $e')),
                                   );
                                 }
                               }

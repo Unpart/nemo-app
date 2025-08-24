@@ -4,9 +4,7 @@ import 'package:frontend/providers/album_provider.dart';
 import 'package:frontend/providers/photo_provider.dart';
 import 'package:frontend/services/album_api.dart';
 import 'select_album_photos_screen.dart';
-import 'package:frontend/services/photo_api.dart';
-import 'package:frontend/presentation/screens/photo/photo_detail_screen.dart';
-import 'package:frontend/presentation/screens/photo/photo_edit_screen.dart';
+// removed unused imports after refactor
 import 'package:frontend/presentation/screens/photo/photo_viewer_screen.dart';
 
 class AlbumDetailScreen extends StatefulWidget {
@@ -64,116 +62,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     }
   }
 
-  Future<void> _showPhotoActions(
-    BuildContext context,
-    PhotoItem p,
-    VoidCallback refreshSelection,
-  ) async {
-    await showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (_) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('상세'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => DraggableScrollableSheet(
-                        initialChildSize: 0.6,
-                        minChildSize: 0.4,
-                        maxChildSize: 0.9,
-                        expand: false,
-                        builder: (c, ctrl) => Container(
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(16),
-                            ),
-                          ),
-                          child: PhotoDetailSheet(photoId: p.photoId),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined),
-                  title: const Text('수정'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PhotoEditScreen(photoId: p.photoId),
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.delete_outline),
-                  title: const Text('삭제'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: const Text('삭제하시겠어요?'),
-                        content: const Text('이 사진은 영구 삭제됩니다.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('취소'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text('삭제'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (ok != true) return;
-                    try {
-                      await PhotoApi().deletePhoto(p.photoId);
-                      if (!mounted) return;
-                      context.read<PhotoProvider>().removeById(p.photoId);
-                      context.read<AlbumProvider>().removePhotos(
-                        widget.albumId,
-                        [p.photoId],
-                      );
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text('삭제되었습니다.')));
-                      refreshSelection();
-                    } catch (e) {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
-                    }
-                  },
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  // _showPhotoActions (미사용) 제거
 
   @override
   Widget build(BuildContext context) {
@@ -216,24 +105,88 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
         title: Text(album.title.isEmpty ? '앨범' : album.title),
         actions: [
           IconButton(
-            onPressed: _working ? null : _addPhotos,
-            icon: const Icon(Icons.add_photo_alternate_outlined),
-            tooltip: '사진 추가',
+            tooltip: '사진 선택',
+            icon: const Icon(Icons.checklist_rtl),
+            onPressed: () {
+              // 길게 눌러 선택과 동일: 안내 토스트
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('사진을 길게 눌러 선택하세요.')));
+            },
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_horiz),
+            onSelected: (v) async {
+              switch (v) {
+                case 'share':
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('공유는 추후 지원 예정입니다.')),
+                  );
+                  break;
+                case 'add':
+                  if (!_working) await _addPhotos();
+                  break;
+                case 'edit':
+                  await showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) => _AlbumEditSheet(albumId: widget.albumId),
+                  );
+                  break;
+                case 'delete':
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('앨범 삭제'),
+                      content: const Text('이 앨범을 삭제하시겠습니까?'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('취소'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('삭제'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok == true) {
+                    try {
+                      final res = await AlbumApi.deleteAlbum(widget.albumId);
+                      if (!mounted) return;
+                      context.read<AlbumProvider>().removeAlbum(widget.albumId);
+                      Navigator.pop(context); // 상세 화면 닫기
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            (res['message'] as String?) ?? '앨범이 삭제되었습니다.',
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
+                    }
+                  }
+                  break;
+              }
+            },
+            itemBuilder: (c) => const [
+              PopupMenuItem(value: 'share', child: Text('공유')),
+              PopupMenuItem(value: 'add', child: Text('사진 추가')),
+              PopupMenuItem(value: 'edit', child: Text('앨범 수정')),
+              PopupMenuItem(value: 'delete', child: Text('앨범 삭제')),
+            ],
           ),
         ],
       ),
       body: Column(
         children: [
-          if (album.coverPhotoUrl != null)
-            AspectRatio(
-              aspectRatio: 3 / 2,
-              child: Image.network(
-                album.coverPhotoUrl!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    const ColoredBox(color: Color(0xFFE0E0E0)),
-              ),
-            ),
+          // 앨범 상세에서는 상단 썸네일(커버) 노출 제거
           Padding(
             padding: const EdgeInsets.all(12),
             child: Row(
@@ -336,6 +289,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                                     builder: (_) => PhotoViewerScreen(
                                       photoId: p.photoId,
                                       imageUrl: p.imageUrl,
+                                      albumId: widget.albumId,
                                     ),
                                   ),
                                 );
@@ -364,6 +318,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                                   Container(
                                     color: Colors.blue.withOpacity(0.25),
                                   ),
+                                // i 버튼 제거 요청에 따라 상세 오버레이 제거
                               ],
                             ),
                           );
@@ -390,6 +345,281 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AlbumEditSheet extends StatefulWidget {
+  final int albumId;
+  const _AlbumEditSheet({required this.albumId});
+
+  @override
+  State<_AlbumEditSheet> createState() => _AlbumEditSheetState();
+}
+
+class _AlbumEditSheetState extends State<_AlbumEditSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  int? _coverId;
+  String? _coverUrl;
+  bool _submitting = false;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _initialized) return;
+      final album = context.read<AlbumProvider>().byId(widget.albumId);
+      if (album != null) {
+        _titleCtrl.text = album.title;
+        _descCtrl.text = album.description;
+        _coverUrl ??= album.coverPhotoUrl;
+      }
+      _initialized = true;
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (context, ctrl) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          child: SafeArea(
+            top: false,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => FocusScope.of(context).unfocus(),
+              child: SingleChildScrollView(
+                controller: ctrl,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.all(16),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '앨범 수정',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Builder(
+                        builder: (context) {
+                          final album = context.read<AlbumProvider>().byId(
+                            widget.albumId,
+                          );
+                          if (album != null) {
+                            if (_titleCtrl.text.isEmpty &&
+                                album.title.isNotEmpty) {
+                              _titleCtrl.text = album.title;
+                            }
+                            if (_descCtrl.text.isEmpty &&
+                                album.description.isNotEmpty) {
+                              _descCtrl.text = album.description;
+                            }
+                          }
+                          final displayCover =
+                              _coverUrl ?? album?.coverPhotoUrl;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: SizedBox(
+                                  height: 180,
+                                  width: double.infinity,
+                                  child:
+                                      (displayCover != null &&
+                                          displayCover.isNotEmpty)
+                                      ? Image.network(
+                                          displayCover,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              const ColoredBox(
+                                                color: Color(0xFFE0E0E0),
+                                              ),
+                                        )
+                                      : const ColoredBox(
+                                          color: Color(0xFFE0E0E0),
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              OutlinedButton.icon(
+                                onPressed: () async {
+                                  await showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    builder: (_) {
+                                      final alb = context
+                                          .read<AlbumProvider>()
+                                          .byId(widget.albumId);
+                                      final photos = context
+                                          .read<PhotoProvider>()
+                                          .items
+                                          .where(
+                                            (p) =>
+                                                (alb?.photoIdList ?? const [])
+                                                    .contains(p.photoId),
+                                          )
+                                          .toList();
+                                      return SafeArea(
+                                        child: SizedBox(
+                                          height:
+                                              MediaQuery.of(
+                                                context,
+                                              ).size.height *
+                                              0.6,
+                                          child: GridView.builder(
+                                            padding: const EdgeInsets.all(12),
+                                            gridDelegate:
+                                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                                  crossAxisCount: 3,
+                                                  mainAxisSpacing: 8,
+                                                  crossAxisSpacing: 8,
+                                                ),
+                                            itemCount: photos.length,
+                                            itemBuilder: (_, i) {
+                                              final p = photos[i];
+                                              return GestureDetector(
+                                                onTap: () {
+                                                  setState(() {
+                                                    _coverId = p.photoId;
+                                                    _coverUrl = p.imageUrl;
+                                                  });
+                                                  Navigator.pop(context);
+                                                },
+                                                child: Image.network(
+                                                  p.imageUrl,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (_, __, ___) =>
+                                                      const ColoredBox(
+                                                        color: Color(
+                                                          0xFFE0E0E0,
+                                                        ),
+                                                      ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                                icon: const Icon(Icons.image_outlined),
+                                label: const Text('대표사진 수정'),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _titleCtrl,
+                        decoration: const InputDecoration(labelText: '제목'),
+                        onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _descCtrl,
+                        decoration: const InputDecoration(labelText: '설명'),
+                        minLines: 1,
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.newline,
+                        onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _submitting
+                              ? null
+                              : () async {
+                                  setState(() => _submitting = true);
+                                  try {
+                                    await AlbumApi.updateAlbum(
+                                      albumId: widget.albumId,
+                                      title: _titleCtrl.text.trim().isEmpty
+                                          ? null
+                                          : _titleCtrl.text.trim(),
+                                      description: _descCtrl.text.trim().isEmpty
+                                          ? null
+                                          : _descCtrl.text.trim(),
+                                      coverPhotoId: _coverId,
+                                    );
+                                    if (!mounted) return;
+                                    if (_titleCtrl.text.trim().isNotEmpty ||
+                                        _descCtrl.text.trim().isNotEmpty) {
+                                      // 간단히 닫고 상위에서 새로고침은 유지
+                                    }
+                                    if (_coverUrl != null) {
+                                      context
+                                          .read<AlbumProvider>()
+                                          .updateCoverUrl(
+                                            widget.albumId,
+                                            _coverUrl,
+                                          );
+                                    }
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('앨범 정보가 수정되었습니다.'),
+                                      ),
+                                    );
+                                    Navigator.pop(context);
+                                  } catch (e) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('수정 실패: $e')),
+                                    );
+                                  } finally {
+                                    if (mounted)
+                                      setState(() => _submitting = false);
+                                  }
+                                },
+                          icon: const Icon(Icons.check),
+                          label: _submitting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('저장'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

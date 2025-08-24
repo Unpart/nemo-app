@@ -3,6 +3,7 @@ import 'package:frontend/services/album_api.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/providers/album_provider.dart';
 import 'package:frontend/presentation/screens/album/select_album_photos_screen.dart';
+import 'package:frontend/providers/photo_provider.dart';
 
 class CreateAlbumScreen extends StatefulWidget {
   const CreateAlbumScreen({super.key});
@@ -106,8 +107,9 @@ class _CreateAlbumScreenState extends State<CreateAlbumScreen> {
                             _selectedPhotoIds
                               ..clear()
                               ..addAll(selected);
+                            // 자동으로 대표사진을 첫 번째 선택으로 지정
                             if (_selectedPhotoIds.isNotEmpty) {
-                              _coverPhotoId ??= _selectedPhotoIds.first;
+                              _coverPhotoId = _selectedPhotoIds.first;
                             }
                           });
                         }
@@ -125,20 +127,99 @@ class _CreateAlbumScreenState extends State<CreateAlbumScreen> {
                     child: OutlinedButton.icon(
                       onPressed: _selectedPhotoIds.isEmpty
                           ? null
-                          : () {
-                              setState(() {
-                                _coverPhotoId = _selectedPhotoIds.first;
-                              });
+                          : () async {
+                              await showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                builder: (_) {
+                                  final items = context
+                                      .read<PhotoProvider>()
+                                      .items;
+                                  final selectedList = _selectedPhotoIds
+                                      .toList();
+                                  return SafeArea(
+                                    child: SizedBox(
+                                      height:
+                                          MediaQuery.of(context).size.height *
+                                          0.6,
+                                      child: GridView.builder(
+                                        padding: const EdgeInsets.all(12),
+                                        gridDelegate:
+                                            const SliverGridDelegateWithFixedCrossAxisCount(
+                                              crossAxisCount: 3,
+                                              mainAxisSpacing: 8,
+                                              crossAxisSpacing: 8,
+                                            ),
+                                        itemCount: selectedList.length,
+                                        itemBuilder: (_, i) {
+                                          final pid = selectedList[i];
+                                          final idx = items.indexWhere(
+                                            (e) => e.photoId == pid,
+                                          );
+                                          final url = idx != -1
+                                              ? items[idx].imageUrl
+                                              : '';
+                                          return GestureDetector(
+                                            onTap: () {
+                                              setState(
+                                                () => _coverPhotoId = pid,
+                                              );
+                                              Navigator.pop(context);
+                                            },
+                                            child: url.isNotEmpty
+                                                ? Image.network(
+                                                    url,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder:
+                                                        (_, __, ___) =>
+                                                            const ColoredBox(
+                                                              color: Color(
+                                                                0xFFE0E0E0,
+                                                              ),
+                                                            ),
+                                                  )
+                                                : const ColoredBox(
+                                                    color: Color(0xFFE0E0E0),
+                                                  ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                              );
                             },
                       icon: const Icon(Icons.image_outlined),
-                      label: Text(
-                        _coverPhotoId == null
-                            ? '대표사진 지정'
-                            : '대표사진: ${_coverPhotoId}',
-                      ),
+                      label: const Text('대표사진 수정'),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              Builder(
+                builder: (context) {
+                  if (_coverPhotoId == null) return const SizedBox.shrink();
+                  final items = context.watch<PhotoProvider>().items;
+                  final idx = items.indexWhere(
+                    (e) => e.photoId == _coverPhotoId,
+                  );
+                  final url = idx != -1 ? items[idx].imageUrl : '';
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: SizedBox(
+                      height: 140,
+                      width: double.infinity,
+                      child: url.isNotEmpty
+                          ? Image.network(
+                              url,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  const ColoredBox(color: Color(0xFFE0E0E0)),
+                            )
+                          : const ColoredBox(color: Color(0xFFE0E0E0)),
+                    ),
+                  );
+                },
               ),
               const Spacer(),
               SizedBox(

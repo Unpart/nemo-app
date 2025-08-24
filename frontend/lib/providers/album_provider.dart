@@ -109,6 +109,11 @@ class AlbumProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void removeAlbum(int albumId) {
+    _albums.removeWhere((e) => e.albumId == albumId);
+    notifyListeners();
+  }
+
   Future<void> loadDetail(int albumId) async {
     final res = await AlbumApi.getAlbum(albumId);
     final idx = _albums.indexWhere((e) => e.albumId == albumId);

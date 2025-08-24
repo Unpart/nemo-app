@@ -152,14 +152,20 @@ class _QrScannerScreenState extends State<QrScannerScreen>
               top: 16,
               child: Row(
                 children: [
-                  IconButton(
-                    onPressed: _toggleTorch,
-                    color: Colors.white,
-                    icon: Icon(
-                      _torchEnabled
-                          ? Icons.flash_on_rounded
-                          : Icons.flash_off_rounded,
-                    ),
+                  ValueListenableBuilder<TorchState>(
+                    valueListenable: _controller.torchState,
+                    builder: (context, state, _) {
+                      final isOn = state == TorchState.on;
+                      return IconButton(
+                        onPressed: _toggleTorch,
+                        color: Colors.white,
+                        icon: Icon(
+                          isOn
+                              ? Icons.flash_on_rounded
+                              : Icons.flash_off_rounded,
+                        ),
+                      );
+                    },
                   ),
                   IconButton(
                     onPressed: _switchCamera,

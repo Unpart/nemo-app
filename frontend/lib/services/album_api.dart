@@ -252,4 +252,65 @@ class AlbumApi {
     if (res.statusCode == 200 || res.statusCode == 204) return;
     throw Exception('Failed to set cover (${res.statusCode})');
   }
+
+  // PUT /api/albums/{albumId}
+  static Future<Map<String, dynamic>> updateAlbum({
+    required int albumId,
+    String? title,
+    String? description,
+    int? coverPhotoId,
+  }) async {
+    if (AppConstants.useMockApi) {
+      await Future.delayed(
+        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
+      );
+      if (coverPhotoId != null && coverPhotoId < 0) {
+        throw Exception('INVALID_COVER_PHOTO');
+      }
+      return {'albumId': albumId, 'message': '앨범 정보가 성공적으로 수정되었습니다.'};
+    }
+    final body = <String, dynamic>{};
+    if (title != null) body['title'] = title;
+    if (description != null) body['description'] = description;
+    if (coverPhotoId != null) body['coverPhotoId'] = coverPhotoId;
+
+    final res = await http.put(
+      _uri('/api/albums/$albumId'),
+      headers: _headersJson(),
+      body: jsonEncode(body),
+    );
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    } else if (res.statusCode == 403) {
+      throw Exception('FORBIDDEN');
+    } else if (res.statusCode == 404) {
+      throw Exception('ALBUM_NOT_FOUND');
+    } else if (res.statusCode == 400) {
+      throw Exception('INVALID_COVER_PHOTO');
+    }
+    throw Exception('Failed to update album (${res.statusCode})');
+  }
+
+  // DELETE /api/albums/{albumId}
+  static Future<Map<String, dynamic>> deleteAlbum(int albumId) async {
+    if (AppConstants.useMockApi) {
+      await Future.delayed(
+        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
+      );
+      return {'albumId': albumId, 'message': '앨범이 성공적으로 삭제되었습니다.'};
+    }
+    final res = await http.delete(
+      _uri('/api/albums/$albumId'),
+      headers: _headersJson(),
+    );
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    if (res.statusCode == 204) {
+      return {'albumId': albumId, 'message': '앨범이 성공적으로 삭제되었습니다.'};
+    }
+    if (res.statusCode == 403) throw Exception('FORBIDDEN');
+    if (res.statusCode == 404) throw Exception('ALBUM_NOT_FOUND');
+    throw Exception('Failed to delete album (${res.statusCode})');
+  }
 }
