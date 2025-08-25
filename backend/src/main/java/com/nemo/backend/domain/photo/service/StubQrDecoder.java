@@ -1,23 +1,18 @@
 package com.nemo.backend.domain.photo.service;
 
-import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 
-@Component
+/**
+ * 테스트 환경에서 사용되는 스텁 QR 디코더.
+ * QR 이미지에서 아무 문자열도 읽지 않고 항상 null을 반환합니다.
+ */
+@Profile("test")
+@Service
 public class StubQrDecoder implements QrDecoder {
     @Override
     public String decode(MultipartFile qrFile) {
-        try {
-            byte[] data = qrFile.getBytes();
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(data);
-            return HexFormat.of().formatHex(digest);
-        } catch (IOException | NoSuchAlgorithmException e) {
-            return null;
-        }
+        return null; // 테스트에서는 QR 해석을 하지 않음
     }
 }
