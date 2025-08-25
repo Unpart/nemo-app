@@ -6,7 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface PhotoService {
-    PhotoResponseDto upload(Long userId, MultipartFile file, MultipartFile qrFile);
+    PhotoResponseDto upload(Long userId, MultipartFile qrFile);
     Page<PhotoResponseDto> list(Long userId, Pageable pageable);
     void delete(Long userId, Long photoId);
 }
