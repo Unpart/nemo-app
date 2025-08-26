@@ -3,18 +3,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'package:frontend/app/constants.dart';
-import 'package:frontend/services/auth_service.dart';
+import 'api_client.dart';
 
 class AlbumApi {
-  static Uri _uri(String path) => Uri.parse('${AuthService.baseUrl}$path');
+  static Uri _uri(String path) => ApiClient.uri(path);
 
-  static Map<String, String> _headersJson() {
-    final token = AuthService.accessToken;
-    return {
-      'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
-  }
+  static Map<String, String> _headersJson() => ApiClient.headers();
 
   // GET /api/albums?sort=&page=&size=&favoriteOnly=
   static Future<Map<String, dynamic>> getAlbums({
@@ -69,8 +63,10 @@ class AlbumApi {
       'size': '$size',
       if (favoriteOnly != null) 'favoriteOnly': favoriteOnly.toString(),
     };
-    final uri = _uri('/api/albums').replace(queryParameters: q);
-    final res = await http.get(uri, headers: _headersJson());
+    final res = await ApiClient.get(
+      '/api/albums',
+      queryParameters: q,
+    );
     if (res.statusCode == 200) {
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
@@ -103,15 +99,14 @@ class AlbumApi {
       };
     }
 
-    final res = await http.post(
-      _uri('/api/albums'),
-      headers: _headersJson(),
-      body: jsonEncode({
+    final res = await ApiClient.post(
+      '/api/albums',
+      body: {
         'title': title,
         if (description != null) 'description': description,
         if (coverPhotoId != null) 'coverPhotoId': coverPhotoId,
         if (photoIdList != null) 'photoIdList': photoIdList,
-      }),
+      },
     );
 
     if (res.statusCode == 201 || res.statusCode == 200) {
@@ -132,10 +127,9 @@ class AlbumApi {
       return;
     }
 
-    final res = await http.post(
-      _uri('/api/albums/$albumId/photos'),
-      headers: _headersJson(),
-      body: jsonEncode({'photoIdList': photoIds}),
+    final res = await ApiClient.post(
+      '/api/albums/$albumId/photos',
+      body: {'photoIdList': photoIds},
     );
 
     if (res.statusCode == 200 || res.statusCode == 204) return;
@@ -223,10 +217,7 @@ class AlbumApi {
         ],
       };
     }
-    final res = await http.get(
-      _uri('/api/albums/$albumId'),
-      headers: _headersJson(),
-    );
+    final res = await ApiClient.get('/api/albums/$albumId');
     if (res.statusCode == 200) {
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
