@@ -42,6 +42,8 @@ dependencies {
     // ZXing 라이브러리 (QR 디코딩용)
     implementation 'com.google.zxing:core:3.5.2'
     implementation 'com.google.zxing:javase:3.5.2'
+    // Jsoup 라이브러리 (HTML 파싱용)
+    implementation 'org.jsoup:jsoup:1.17.2'
 }
 
 tasks.named('test') {
