@@ -1,13 +1,15 @@
-import 'dart:convert';
 import 'dart:async';
+import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../presentation/screens/login/signup_form_model.dart';
+
 import '../app/constants.dart';
+import '../presentation/screens/login/signup_form_model.dart';
+import 'api_client.dart';
 
 class AuthService {
   // ✅ 서버 URL 설정 (로컬 or 배포 서버로 교체해야 함)
   static const String baseUrl =
-      'https://your-api-url.com'; // ← TODO: 실제 주소로 바꿔!
+      'https://nemo-backend.onrender.com'; // ← TODO: 실제 주소로 바꿔!
 
   // JWT 토큰 저장소
   static String? _accessToken;
@@ -26,11 +28,7 @@ class AuthService {
 
   // JWT 토큰이 포함된 헤더 생성
   static Map<String, String> _getHeaders({bool includeAuth = true}) {
-    final headers = {'Content-Type': 'application/json'};
-    if (includeAuth && _accessToken != null) {
-      headers['Authorization'] = 'Bearer $_accessToken';
-    }
-    return headers;
+    return ApiClient.headers(includeAuth: includeAuth);
   }
 
   /// 로그인 요청
@@ -55,13 +53,11 @@ class AuthService {
         'profileImageUrl': null,
       };
     }
-    final uri = Uri.parse('$baseUrl/api/auth/login');
-
     try {
-      final response = await http.post(
-        uri,
-        headers: _getHeaders(includeAuth: false),
-        body: jsonEncode({'email': email, 'password': password}),
+      final response = await ApiClient.post(
+        '/api/auth/login',
+        body: {'email': email, 'password': password},
+        includeAuth: false,
       );
 
       if (response.statusCode == 200) {
@@ -113,18 +109,15 @@ class AuthService {
       }
       return true;
     }
-    final uri = Uri.parse('$baseUrl/api/users/signup');
-
     try {
-      final response = await http.post(
-        uri,
-        headers: _getHeaders(includeAuth: false),
-        // 명세에 맞춰 3개 필드만 전송
-        body: jsonEncode({
+      final response = await ApiClient.post(
+        '/api/users/signup',
+        includeAuth: false,
+        body: {
           'email': form.email,
           'password': form.password,
           'nickname': form.nickname,
-        }),
+        },
       );
 
       if (response.statusCode == 201) {
@@ -151,12 +144,11 @@ class AuthService {
       );
       return;
     }
-    final uri = Uri.parse('$baseUrl/api/auth/email/verification/send');
     try {
-      final response = await http.post(
-        uri,
-        headers: _getHeaders(includeAuth: false),
-        body: jsonEncode({'email': email}),
+      final response = await ApiClient.post(
+        '/api/auth/email/verification/send',
+        includeAuth: false,
+        body: {'email': email},
       );
       if (response.statusCode != 200) {
         if (response.statusCode == 429) {
@@ -190,12 +182,11 @@ class AuthService {
       }
       return true;
     }
-    final uri = Uri.parse('$baseUrl/api/auth/email/verification/confirm');
     try {
-      final response = await http.post(
-        uri,
-        headers: _getHeaders(includeAuth: false),
-        body: jsonEncode({'email': email, 'code': code}),
+      final response = await ApiClient.post(
+        '/api/auth/email/verification/confirm',
+        includeAuth: false,
+        body: {'email': email, 'code': code},
       );
       if (response.statusCode == 200) {
         return true;
@@ -227,10 +218,8 @@ class AuthService {
         'createdAt': DateTime.now().toIso8601String(),
       };
     }
-    final uri = Uri.parse('$baseUrl/api/users/me');
-
     try {
-      final response = await http.get(uri, headers: _getHeaders());
+      final response = await ApiClient.get('/api/users/me');
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -253,10 +242,8 @@ class AuthService {
       clearAccessToken();
       return true;
     }
-    final uri = Uri.parse('$baseUrl/api/users/logout');
-
     try {
-      final response = await http.post(uri, headers: _getHeaders());
+      final response = await ApiClient.post('/api/users/logout');
 
       if (response.statusCode == 200) {
         // 로컬 토큰 제거
@@ -282,11 +269,9 @@ class AuthService {
       clearAccessToken();
       return true;
     }
-    final uri = Uri.parse('$baseUrl/api/users/me');
-
     try {
       final response = await http.delete(
-        uri,
+        ApiClient.uri('/api/users/me'),
         headers: _getHeaders(),
         body: jsonEncode({'password': password}),
       );

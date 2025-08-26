@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../app/constants.dart';
-import 'auth_service.dart';
+import 'api_client.dart';
 
 class PhotoUploadApi {
-  static Uri _endpoint(String path) => Uri.parse('${AuthService.baseUrl}$path');
+  static Uri _endpoint(String path) => ApiClient.uri(path);
 
   /// 사진 업로드 (QR 기반). 모킹 모드 지원.
   Future<Map<String, dynamic>> uploadPhotoViaQr({
@@ -48,8 +48,7 @@ class PhotoUploadApi {
 
     final uri = _endpoint('/api/photos');
     final request = http.MultipartRequest('POST', uri);
-    request.headers['Authorization'] =
-        'Bearer ${AuthService.accessToken ?? ''}';
+    request.headers.addAll(ApiClient.headers(json: false));
     request.fields['qrCode'] = qrCode;
     request.fields['takenAt'] = takenAtIso;
     request.fields['location'] = location;
