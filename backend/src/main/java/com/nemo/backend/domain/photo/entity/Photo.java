@@ -1,31 +1,69 @@
 package com.nemo.backend.domain.photo.entity;
 
-import com.nemo.backend.domain.album.entity.Album;
-import com.nemo.backend.global.entity.BaseEntity;
 import jakarta.persistence.*;
-import lombok.*;
+import java.time.LocalDateTime;
+import com.nemo.backend.domain.album.entity.Album;
 
+/**
+ * Photo entity representing a single uploaded photo. A photo belongs to a user and
+ * optionally to an album. The qrHash field stores a unique hash of the QR
+ * payload to prevent duplicate uploads.
+ */
 @Entity
-@Table(name = "photo")
-@Getter @Setter
-@NoArgsConstructor @AllArgsConstructor @Builder
-public class Photo extends BaseEntity {
-
+@Table(name = "photos", uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"qrHash"})
+})
+public class Photo {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
-    private String imageUrl;
+    /** Owner of the photo (FK to User). */
+    private Long userId;
 
-    @Column(nullable = false)
-    private String brand; // 인생네컷, 하츄핑 등 브랜드명
-
-    private String location;  // 촬영 위치 이름
-    private Double latitude;  // 위도
-    private Double longitude; // 경도
-
+    /**
+     * Many photos may belong to a single album. The Album entity defines a
+     * collection mapped by the property name "album" on Photo. Hibernate
+     * requires this association to satisfy the mapping on Album.photos.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "album_id", nullable = false)
+    @JoinColumn(name = "album_id")
     private Album album;
+
+    /** URL or path where the uploaded image is stored. */
+    @Column(nullable = false)
+    private String url;
+
+    /** Hash of the associated QR code; used to prevent duplicate uploads. */
+    @Column(unique = true)
+    private String qrHash;
+
+    /** Timestamp when the photo was created. */
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    /** Soft-delete flag. */
+    private Boolean deleted = false;
+
+    public Photo() {}
+
+    public Photo(Long userId, Album album, String url, String qrHash) {
+        this.userId = userId;
+        this.album = album;
+        this.url = url;
+        this.qrHash = qrHash;
+    }
+
+    public Long getId() { return id; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
+    public Album getAlbum() { return album; }
+    public void setAlbum(Album album) { this.album = album; }
+    public String getUrl() { return url; }
+    public void setUrl(String url) { this.url = url; }
+    public String getQrHash() { return qrHash; }
+    public void setQrHash(String qrHash) { this.qrHash = qrHash; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public Boolean getDeleted() { return deleted; }
+    public void setDeleted(Boolean deleted) { this.deleted = deleted; }
 }
