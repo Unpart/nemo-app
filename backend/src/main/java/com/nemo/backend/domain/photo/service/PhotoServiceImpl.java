@@ -27,13 +27,18 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 @Transactional
@@ -50,6 +55,7 @@ public class PhotoServiceImpl implements PhotoService {
     private final PhotoRepository photoRepository;
     private final PhotoStorage storage;
     private final QrDecoder qrDecoder;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
     public PhotoServiceImpl(PhotoRepository photoRepository,
@@ -113,8 +119,19 @@ public class PhotoServiceImpl implements PhotoService {
 
     // ===================== 자산 수집 =====================
 
-    /** 인생네컷류 페이지에서 이미지/썸네일/영상 URL을 모두 찾고 스토리지에 업로드 */
+    /**
+     * life4cut, 하루필름 등 도메인을 우선 체크하여 특수 처리한 뒤,
+     * 나머지는 기존 HTML/리다이렉트 추적 로직으로 처리.
+     */
     private AssetPair fetchAssetsFromQrPayload(String startUrl) throws IOException {
+        // 특정 포토부스 API는 JSON을 반환하므로 우선 처리
+        if (startUrl.contains("api.life4cut.net")) {
+            return fetchLife4cutAssets(startUrl);
+        }
+        if (startUrl.contains("harufilm.kr/api/qrcode.php")) {
+            return fetchHaruFilmAssets(startUrl);
+        }
+
         CookieManager cm = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
         CookieHandler.setDefault(cm);
 
@@ -226,6 +243,86 @@ public class PhotoServiceImpl implements PhotoService {
         return new AssetPair(foundImage, foundThumb, foundVideo, /*takenAt*/ null);
     }
 
+    /**
+     * Life4cut 전용 JSON/텍스트 응답 처리.
+     * 이미지와 비디오를 찾지 못하면 예외를 던진다.
+     */
+    private AssetPair fetchLife4cutAssets(String url) throws IOException {
+        HttpURLConnection conn = open(url, "GET", null, url);
+        String body = readAll(conn.getInputStream());
+
+        // 정규식으로 이미지/비디오 URL 추출
+        List<String> images = new ArrayList<>();
+        Matcher mImg = Pattern.compile("(https?://[^\\s\"']+\\.(?:png|jpe?g|gif|webp))",
+                Pattern.CASE_INSENSITIVE).matcher(body);
+        while (mImg.find()) {
+            images.add(mImg.group(1));
+        }
+        String video = null;
+        Matcher mVid = Pattern.compile("(https?://[^\\s\"']+\\.(?:mp4|mov|webm|m4v))",
+                Pattern.CASE_INSENSITIVE).matcher(body);
+        if (mVid.find()) video = mVid.group(1);
+
+        String storedImg = null;
+        String thumb = null;
+        if (!images.isEmpty()) {
+            storedImg = downloadToStorage(images.get(0), url);
+            thumb = storedImg;
+        }
+        String storedVideo = null;
+        if (video != null) {
+            storedVideo = downloadToStorage(video, url);
+        }
+
+        if (storedImg == null && storedVideo == null) {
+            throw new IOException("Life4cut 응답에서 이미지나 비디오를 찾지 못했습니다.");
+        }
+        return new AssetPair(storedImg, thumb, storedVideo, null);
+    }
+
+    /**
+     * 하루필름 전용 JSON 응답 처리.
+     * 키명을 알 수 없는 경우 life4cut 방식으로 fallback.
+     */
+    private AssetPair fetchHaruFilmAssets(String url) throws IOException {
+        HttpURLConnection conn = open(url, "GET", null, url);
+        String body = readAll(conn.getInputStream());
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            List<String> imgs = new ArrayList<>();
+            if (root.has("imageUrls")) {
+                root.get("imageUrls").forEach(node -> imgs.add(node.asText()));
+            } else if (root.has("img_list")) {
+                root.get("img_list").forEach(node -> imgs.add(node.asText()));
+            }
+            String video = null;
+            if (root.has("videoUrl")) {
+                video = root.get("videoUrl").asText();
+            } else if (root.has("video")) {
+                video = root.get("video").asText();
+            }
+
+            String storedImg = null;
+            String thumb = null;
+            if (!imgs.isEmpty()) {
+                storedImg = downloadToStorage(imgs.get(0), url);
+                thumb = storedImg;
+            }
+            String storedVideo = null;
+            if (video != null && !video.isBlank()) {
+                storedVideo = downloadToStorage(video, url);
+            }
+
+            if (storedImg == null && storedVideo == null) {
+                throw new IOException("HaruFilm 응답에서 이미지나 비디오를 찾지 못했습니다.");
+            }
+            return new AssetPair(storedImg, thumb, storedVideo, null);
+        } catch (Exception ex) {
+            // JSON 파싱 실패 시 life4cut 방식으로 대체
+            return fetchLife4cutAssets(url);
+        }
+    }
+
     private AssetPair storeFromNonUrlPayload(String payload) throws IOException {
         // URL이 아닌 QR 포맷(예: base64, 커스텀 프로토콜 등)을 다루려면 여기 구현
         throw new InvalidQrException("지원하지 않는 QR 포맷입니다.");
@@ -238,7 +335,6 @@ public class PhotoServiceImpl implements PhotoService {
 
         HtmlExtracted out = new HtmlExtracted();
 
-        // 메타 이미지/썸네일
         out.imageUrl = firstMeta(doc,
                 "meta[property=og:image]", "meta[name=og:image]",
                 "meta[property=og:image:url]", "meta[property=og:image:secure_url]",
@@ -249,7 +345,6 @@ public class PhotoServiceImpl implements PhotoService {
                 "meta[property=og:image:thumbnail]", "meta[name=thumbnail]"
         );
 
-        // 메타 비디오
         out.videoUrl = firstMeta(doc,
                 "meta[property=og:video]", "meta[name=og:video]",
                 "meta[property=og:video:url]", "meta[property=og:video:secure_url]",
@@ -257,7 +352,6 @@ public class PhotoServiceImpl implements PhotoService {
         );
 
         // 다운로드 링크/버튼에서 image/video 키워드 추출
-        // a[download], 버튼 id/name/data-* 속성 검사
         Elements links = doc.select("a[download], a#download, a.button, a, button, .btn, .button");
         for (Element el : links) {
             String text = (el.hasText() ? el.text() : "").toLowerCase(Locale.ROOT);
@@ -433,7 +527,12 @@ public class PhotoServiceImpl implements PhotoService {
 
     private String inferBrand(String urlOrPayload) {
         String s = urlOrPayload.toLowerCase(Locale.ROOT);
-        if (s.contains("인생네컷") || s.contains("life4cut") || s.contains("life-four-cut")) return "인생네컷";
+        if (s.contains("인생네컷") || s.contains("life4cut")) return "인생네컷";
+        if (s.contains("하루필름") || s.contains("harufilm")) return "하루필름";
+        if (s.contains("photogray") || s.contains("pgshort")) return "포토그레이";
+        if (s.contains("exit") || s.contains("photoqr3")) return "엑시트";
+        if (s.contains("photoism")) return "포토이즘";
+        if (s.contains("signature")) return "포토시그니쳐";
         if (s.contains("howdyoudo") || s.contains("하우두유두")) return "하우두유두";
         if (s.contains("twin") || s.contains("트윈")) return "트윈포토";
         return null;
@@ -489,6 +588,22 @@ public class PhotoServiceImpl implements PhotoService {
             if (n > 0) remaining -= n;
             return n;
         }
+    }
+
+    /**
+     * InputStream 전체를 문자열로 읽어오는 헬퍼 메서드.
+     * 기존 코드에 없어서 추가.
+     */
+    private String readAll(InputStream in) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        try (InputStream is = in) {
+            byte[] buffer = new byte[8192];
+            int n;
+            while ((n = is.read(buffer)) != -1) {
+                sb.append(new String(buffer, 0, n, StandardCharsets.UTF_8));
+            }
+        }
+        return sb.toString();
     }
 
     // 목록/삭제 (기존과 동일)
