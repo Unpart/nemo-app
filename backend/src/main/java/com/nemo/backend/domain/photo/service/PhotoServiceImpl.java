@@ -74,11 +74,15 @@ public class PhotoServiceImpl implements PhotoService {
         String payload = qrDecoder.decode(qrFile);
         if (payload == null || payload.isBlank()) throw new InvalidQrException("QR 코드를 해석할 수 없습니다.");
 
-        // 2) 만료값(숫자) 방어
+        // 2) 만료값(숫자) 방어: 과거면 Expired → 404
         if (payload.chars().allMatch(Character::isDigit)) {
-            long expiryMillis = Long.parseLong(payload.trim());
-            if (System.currentTimeMillis() > expiryMillis) {
-                throw new InvalidQrException("만료된 QR 코드입니다.");
+            try {
+                long expiryMillis = Long.parseLong(payload.trim());
+                if (System.currentTimeMillis() > expiryMillis) {
+                    throw new ExpiredQrException("만료된 QR 코드입니다.");
+                }
+            } catch (NumberFormatException e) {
+                throw new InvalidQrException("유효하지 않은 QR 만료값입니다.", e);
             }
         }
 
@@ -94,8 +98,11 @@ public class PhotoServiceImpl implements PhotoService {
             } else {
                 assets = storeFromNonUrlPayload(payload);
             }
+        } catch (ExpiredQrException | InvalidQrException e) {
+            throw e; // 그대로 전달 (404/400)
         } catch (IOException e) {
-            throw new RuntimeException("외부 자산을 가져오는 데 실패했습니다.", e);
+            // 네트워크/접근 제한 등은 만료로 간주(404)
+            throw new ExpiredQrException("QR 자원을 가져오는 데 실패했습니다.", e);
         }
 
         // 브랜드 추출(간단 키워드)
@@ -444,6 +451,14 @@ public class PhotoServiceImpl implements PhotoService {
             try (OutputStream os = conn.getOutputStream()) { os.write(bytes); }
         }
         conn.connect();
+        // 여기서 바로 상태코드 판독
+        int code = conn.getResponseCode();
+        if (code == 400) {
+            throw new InvalidQrException("원격 서버가 요청을 거부했습니다. (400)");
+        }
+        if (code == 404 || code == 410) {
+            throw new ExpiredQrException("원격 자원이 존재하지 않습니다. (HTTP " + code + ")");
+        }
         return conn;
     }
 
