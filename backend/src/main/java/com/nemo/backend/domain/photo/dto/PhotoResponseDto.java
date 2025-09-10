@@ -3,32 +3,43 @@ package com.nemo.backend.domain.photo.dto;
 import com.nemo.backend.domain.photo.entity.Photo;
 import java.time.LocalDateTime;
 
-/**
- * Photo 엔티티를 응답용으로 변환하는 DTO입니다.
- * Album과의 연관 관계를 고려하여 albumId를 가져옵니다.
- */
 public class PhotoResponseDto {
     private Long id;
     private Long userId;
     private Long albumId;
-    private String url;
+    private String imageUrl;
+    private String thumbnailUrl;
+    private String videoUrl;
+    private String brand;
+    private LocalDateTime takenAt;
+    private Long locationId;
     private String qrHash;
     private LocalDateTime createdAt;
 
     public PhotoResponseDto(Photo photo) {
         this.id = photo.getId();
         this.userId = photo.getUserId();
-        // Photo 엔티티가 Album 객체를 가지고 있을 경우 앨범 ID를 설정
         this.albumId = (photo.getAlbum() != null ? photo.getAlbum().getId() : null);
-        this.url = photo.getUrl();
+        this.imageUrl = photo.getImageUrl();
+        this.thumbnailUrl = photo.getThumbnailUrl();
+        this.videoUrl = photo.getVideoUrl();
+        this.brand = photo.getBrand();
+        this.takenAt = photo.getTakenAt();
+        this.locationId = photo.getLocationId();
         this.qrHash = photo.getQrHash();
         this.createdAt = photo.getCreatedAt();
     }
 
+    // getters
     public Long getId() { return id; }
     public Long getUserId() { return userId; }
     public Long getAlbumId() { return albumId; }
-    public String getUrl() { return url; }
+    public String getImageUrl() { return imageUrl; }
+    public String getThumbnailUrl() { return thumbnailUrl; }
+    public String getVideoUrl() { return videoUrl; }
+    public String getBrand() { return brand; }
+    public LocalDateTime getTakenAt() { return takenAt; }
+    public Long getLocationId() { return locationId; }
     public String getQrHash() { return qrHash; }
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

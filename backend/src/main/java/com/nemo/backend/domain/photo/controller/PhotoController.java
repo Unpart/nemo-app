@@ -1,9 +1,11 @@
 package com.nemo.backend.domain.photo.controller;
 
+import com.nemo.backend.domain.auth.jwt.JwtTokenProvider;
+import com.nemo.backend.domain.auth.token.RefreshTokenRepository;
 import com.nemo.backend.domain.photo.dto.PhotoResponseDto;
 import com.nemo.backend.domain.photo.service.PhotoService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nemo.backend.global.exception.ApiException;
+import com.nemo.backend.global.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -11,34 +13,35 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Base64;
-
 @RestController
 @RequestMapping("/api/photos")
 public class PhotoController {
     private final PhotoService photoService;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Autowired
-    public PhotoController(PhotoService photoService) {
+    public PhotoController(PhotoService photoService,
+                           JwtTokenProvider jwtTokenProvider,
+                           RefreshTokenRepository refreshTokenRepository) {
         this.photoService = photoService;
+        this.jwtTokenProvider = jwtTokenProvider;
+        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     @PostMapping
     public ResponseEntity<PhotoResponseDto> upload(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @RequestPart("qr") MultipartFile qrFile) {
-
-        Long userId = extractUserIdFromToken(authorizationHeader);
-        PhotoResponseDto dto = photoService.upload(userId, qrFile);
-        return ResponseEntity.ok(dto);
+        Long userId = extractUserId(authorizationHeader);
+        return ResponseEntity.ok(photoService.upload(userId, qrFile));
     }
 
     @GetMapping
     public ResponseEntity<Page<PhotoResponseDto>> list(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             Pageable pageable) {
-
-        Long userId = extractUserIdFromToken(authorizationHeader);
+        Long userId = extractUserId(authorizationHeader);
         return ResponseEntity.ok(photoService.list(userId, pageable));
     }
 
@@ -46,36 +49,25 @@ public class PhotoController {
     public ResponseEntity<Void> delete(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @PathVariable("id") Long photoId) {
-
-        Long userId = extractUserIdFromToken(authorizationHeader);
+        Long userId = extractUserId(authorizationHeader);
         photoService.delete(userId, photoId);
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * Authorization 헤더에서 JWT를 추출하여 "sub" 클레임을 Long 타입 ID로 변환합니다.
-     * 서명 검증은 수행하지 않습니다.
-     */
-    private Long extractUserIdFromToken(String authorizationHeader) {
+    /** 액세스 토큰 서명 검증 + refresh 존재 확인 */
+    private Long extractUserId(String authorizationHeader) {
         if (authorizationHeader == null || !authorizationHeader.startsWith("Bearer ")) {
-            throw new IllegalStateException("Missing or invalid Authorization header");
+            throw new ApiException(ErrorCode.UNAUTHORIZED);
         }
         String token = authorizationHeader.substring(7);
-        String[] parts = token.split("\\.");
-        if (parts.length < 2) {
-            throw new IllegalStateException("Invalid JWT token");
+        if (!jwtTokenProvider.validateToken(token)) {
+            throw new ApiException(ErrorCode.UNAUTHORIZED);
         }
-        try {
-            byte[] decodedPayload = Base64.getUrlDecoder().decode(parts[1]);
-            String payloadJson = new String(decodedPayload);
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode node = mapper.readTree(payloadJson);
-            if (!node.has("sub")) {
-                throw new IllegalStateException("JWT token does not contain 'sub' claim");
-            }
-            return Long.parseLong(node.get("sub").asText());
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to parse JWT token", e);
+        Long userId = jwtTokenProvider.getUserId(token);
+        boolean hasRefresh = refreshTokenRepository.findFirstByUserId(userId).isPresent();
+        if (!hasRefresh) {
+            throw new ApiException(ErrorCode.UNAUTHORIZED);
         }
+        return userId;
     }
 }

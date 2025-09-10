@@ -23,40 +23,44 @@ import java.net.CookiePolicy;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.LinkedHashMap;
-import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Service
 @Transactional
 public class PhotoServiceImpl implements PhotoService {
 
-    // ===== 설정/상수 =====
     private static final int CONNECT_TIMEOUT_MS = 5000;
-    private static final int READ_TIMEOUT_MS = 10000;
-    private static final int MAX_REDIRECTS = 5;
-    private static final int MAX_HTML_FOLLOW = 2;                 // og:image / <img> 추적 최대 단계
-    private static final long MAX_IMAGE_BYTES = 10L * 1024 * 1024; // 10MB
-    private static final String USER_AGENT = "nemo-app/1.0 (+https://nemo)";
+    private static final int READ_TIMEOUT_MS    = 10000;
+    private static final int MAX_REDIRECTS      = 5;
+    private static final int MAX_HTML_FOLLOW    = 2;
+    private static final long MAX_BYTES         = 50L * 1024 * 1024; // 이미지/영상 공통 업로드 제한
+    private static final String USER_AGENT      = "nemo-app/1.0 (+https://nemo)";
     private static final String[] ALLOWED_SCHEMES = {"http", "https"};
 
     private final PhotoRepository photoRepository;
     private final PhotoStorage storage;
     private final QrDecoder qrDecoder;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
-    public PhotoServiceImpl(
-            PhotoRepository photoRepository,
-            PhotoStorage storage,
-            QrDecoder qrDecoder
-    ) {
+    public PhotoServiceImpl(PhotoRepository photoRepository,
+                            PhotoStorage storage,
+                            QrDecoder qrDecoder) {
         this.photoRepository = photoRepository;
         this.storage = storage;
         this.qrDecoder = qrDecoder;
@@ -64,169 +68,368 @@ public class PhotoServiceImpl implements PhotoService {
 
     @Override
     public PhotoResponseDto upload(Long userId, MultipartFile qrFile) {
-        if (qrFile == null || qrFile.isEmpty()) {
-            throw new IllegalArgumentException("QR 파일이 없습니다.");
-        }
+        if (qrFile == null || qrFile.isEmpty()) throw new IllegalArgumentException("QR 파일이 없습니다.");
 
         // 1) QR 디코드
-        String qrPayload = qrDecoder.decode(qrFile);
-        if (qrPayload == null || qrPayload.isBlank()) {
-            throw new InvalidQrException("QR 코드를 해석할 수 없습니다.");
-        }
+        String payload = qrDecoder.decode(qrFile);
+        if (payload == null || payload.isBlank()) throw new InvalidQrException("QR 코드를 해석할 수 없습니다.");
 
-        // 2) (선택) 만료 검사: payload가 숫자면 만료시각으로 간주
-        if (qrPayload.chars().allMatch(Character::isDigit)) {
-            long expiryMillis = Long.parseLong(qrPayload.trim());
-            if (System.currentTimeMillis() > expiryMillis) {
-                throw new InvalidQrException("만료된 QR 코드입니다.");
+        // 2) 만료값(숫자) 방어: 과거면 Expired → 404
+        if (payload.chars().allMatch(Character::isDigit)) {
+            try {
+                long expiryMillis = Long.parseLong(payload.trim());
+                if (System.currentTimeMillis() > expiryMillis) {
+                    throw new ExpiredQrException("만료된 QR 코드입니다.");
+                }
+            } catch (NumberFormatException e) {
+                throw new InvalidQrException("유효하지 않은 QR 만료값입니다.", e);
             }
         }
 
-        // 3) 중복 방지용 해시
-        String qrHash = sha256Hex(qrPayload);
-        photoRepository.findByQrHash(qrHash).ifPresent(existing -> {
-            throw new DuplicateQrException("이미 업로드된 QR 코드입니다.");
-        });
+        // 3) 중복 방지 해시
+        String qrHash = sha256Hex(payload);
+        photoRepository.findByQrHash(qrHash).ifPresent(p -> { throw new DuplicateQrException("이미 업로드된 QR입니다."); });
 
-        // 4) payload가 URL이면 외부에서 이미지를 가져와 저장 (HTML → 이미지/다운로드 버튼 추적 지원)
-        String photoUrl;
+        // 4) 자산 수집
+        AssetPair assets;
         try {
-            if (looksLikeUrl(qrPayload)) {
-                photoUrl = fetchPhotoFromQrPayload(qrPayload);
+            if (looksLikeUrl(payload)) {
+                assets = fetchAssetsFromQrPayload(payload);
             } else {
-                // URL이 아닐 때의 전략이 필요하다면 이 분기를 구현하세요.
-                photoUrl = storeFromNonUrlPayload(qrPayload);
+                assets = storeFromNonUrlPayload(payload);
             }
+        } catch (ExpiredQrException | InvalidQrException e) {
+            throw e; // 그대로 전달 (404/400)
         } catch (IOException e) {
-            throw new RuntimeException("외부 사진을 가져오는 데 실패했습니다.", e);
+            // 네트워크/접근 제한 등은 만료로 간주(404)
+            throw new ExpiredQrException("QR 자원을 가져오는 데 실패했습니다.", e);
         }
 
-        // 5) 저장 및 응답
-        Photo photo = new Photo(userId, null, photoUrl, qrHash);
+        // 브랜드 추출(간단 키워드)
+        String brand = inferBrand(payload);
+
+        // 5) 저장
+        Photo photo = new Photo(
+                userId,
+                null,
+                assets.imageUrl,
+                assets.thumbnailUrl,
+                assets.videoUrl,
+                qrHash,
+                brand,
+                assets.takenAt,
+                null
+        );
         Photo saved = photoRepository.save(photo);
         return new PhotoResponseDto(saved);
     }
 
+    // ===================== 자산 수집 =====================
+
     /**
-     * QR payload를 URL로 간주하여 외부에서 이미지를 다운로드합니다.
-     * - 3xx 리다이렉트 최대 5회 추적
-     * - image/* 인 경우만 바로 저장
-     * - text/html 인 경우 Jsoup으로 og:image/첫 번째 <img> 또는 다운로드 버튼/폼을 추적 (최대 2회)
-     * - 쿠키/Referer 유지, 사이즈/스킴/타임아웃 방어 로직 포함
+     * life4cut, 하루필름 등 도메인을 우선 체크하여 특수 처리한 뒤,
+     * 나머지는 기존 HTML/리다이렉트 추적 로직으로 처리.
      */
-    private String fetchPhotoFromQrPayload(String startUrl) throws IOException {
-        // 세션 유지 (쿠키)
+    private AssetPair fetchAssetsFromQrPayload(String startUrl) throws IOException {
+        // 특정 포토부스 API는 JSON을 반환하므로 우선 처리
+        if (startUrl.contains("api.life4cut.net")) {
+            return fetchLife4cutAssets(startUrl);
+        }
+        if (startUrl.contains("harufilm.kr/api/qrcode.php")) {
+            return fetchHaruFilmAssets(startUrl);
+        }
+
         CookieManager cm = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
         CookieHandler.setDefault(cm);
 
         String current = startUrl;
         int htmlFollow = 0;
 
-        for (int redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
+        String foundImage = null;
+        String foundVideo = null;
+        String foundThumb = null;
+
+        for (int redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
             URL url = new URL(current);
-            if (!isAllowedScheme(url)) {
-                throw new IOException("Unsupported URL scheme: " + url.getProtocol());
-            }
+            if (!isAllowedScheme(url)) throw new IOException("Unsupported URL scheme: " + url.getProtocol());
 
             HttpURLConnection conn = open(current, "GET", null, startUrl);
             int code = conn.getResponseCode();
 
-            // 리다이렉트 수동 처리
+            // 수동 리다이렉트
             if (code / 100 == 3) {
                 String location = conn.getHeaderField("Location");
-                if (location == null || location.isBlank()) {
-                    throw new IOException("Redirect without Location");
-                }
+                if (location == null || location.isBlank()) throw new IOException("Redirect without Location");
                 current = new URL(url, location).toString();
                 continue;
             }
 
             String contentType = safeLower(conn.getContentType());
-            // 바로 이미지면 저장
-            if (contentType != null && contentType.startsWith("image/")) {
-                try (InputStream in = boundedStream(conn)) {
-                    String ext = extractExtensionFromContentType(contentType);
-                    MultipartFile downloaded = toMultipart(in, contentType, ext);
-                    return storage.store(downloaded);
-                }
-            }
-            // Content-Disposition 으로 파일 응답일 수도 있음
+
+            // 파일 스트림 응답 (이미지/영상/첨부)
             String cd = conn.getHeaderField("Content-Disposition");
-            if (cd != null && cd.toLowerCase(Locale.ROOT).contains("attachment")) {
+            boolean isAttachment = cd != null && cd.toLowerCase(Locale.ROOT).contains("attachment");
+            if ((contentType != null && (contentType.startsWith("image/") || contentType.startsWith("video/"))) || isAttachment) {
                 try (InputStream in = boundedStream(conn)) {
-                    String ct = contentType != null ? contentType : "application/octet-stream";
+                    String ct = (contentType != null) ? contentType : "application/octet-stream";
                     String ext = extractExtensionFromContentType(ct);
-                    MultipartFile downloaded = toMultipart(in, ct, ext);
-                    return storage.store(downloaded);
+                    MultipartFile mf = toMultipart(in, ct, ext);
+                    String stored = storage.store(mf);
+
+                    if (ct.startsWith("image/")) {
+                        if (foundImage == null) foundImage = stored;
+                        if (foundThumb == null)  foundThumb  = stored; // 썸네일 없으면 이미지로 대체
+                    } else if (ct.startsWith("video/")) {
+                        if (foundVideo == null) foundVideo = stored;
+                    }
                 }
+                break; // 파일 응답이면 종료
             }
 
-            // HTML → 이미지/다운로드 링크/폼 추적
+            // HTML 파싱
             if (contentType != null && contentType.startsWith("text/html")) {
-                if (htmlFollow >= MAX_HTML_FOLLOW) {
-                    throw new IOException("HTML follow limit reached");
-                }
+                if (htmlFollow >= MAX_HTML_FOLLOW) break;
                 String html = readAll(conn.getInputStream());
+                // 1) 메타/태그 기반 추출
+                HtmlExtracted he = extractFromHtml(html, current);
+                if (he.imageUrl != null && foundImage == null) foundImage = downloadToStorage(he.imageUrl, startUrl);
+                if (he.thumbnailUrl != null && foundThumb == null) foundThumb = downloadToStorage(he.thumbnailUrl, startUrl);
+                if (he.videoUrl != null && foundVideo == null) foundVideo = downloadToStorage(he.videoUrl, startUrl);
 
-                // (1) GET 링크 후보 찾기
-                String candidate = findDownloadUrlInHtml(html, current);
-                if (candidate != null && isProbablyGet(candidate)) {
-                    current = new URL(url, candidate).toString();
-                    htmlFollow++;
-                    continue;
-                }
-
-                // (2) 폼 제출(POST) 필요 시 시도
-                PostForm form = findPostForm(html);
-                if (form != null) {
-                    String actionAbs = new URL(url, form.action != null ? form.action : current).toString();
-                    String body = form.encode();
+                // 2) 폼 기반 다운로드 흐름 (필요 시)
+                if ((foundImage == null || foundVideo == null) && he.postForm != null) {
+                    String actionAbs = new URL(url, he.postForm.action != null ? he.postForm.action : current).toString();
+                    String body = he.postForm.encode();
                     HttpURLConnection post = open(actionAbs, "POST", body, current);
                     String ct2 = safeLower(post.getContentType());
-                    if (ct2 != null && ct2.startsWith("image/")) {
-                        try (InputStream in = boundedStream(post)) {
-                            String ext = extractExtensionFromContentType(ct2);
-                            MultipartFile mf = toMultipart(in, ct2, ext);
-                            return storage.store(mf);
-                        }
-                    }
                     String cd2 = post.getHeaderField("Content-Disposition");
-                    if (cd2 != null && cd2.toLowerCase(Locale.ROOT).contains("attachment")) {
+                    boolean attach2 = cd2 != null && cd2.toLowerCase(Locale.ROOT).contains("attachment");
+
+                    if (ct2 != null && (ct2.startsWith("image/") || ct2.startsWith("video/")) || attach2) {
                         try (InputStream in = boundedStream(post)) {
-                            String ct = ct2 != null ? ct2 : "application/octet-stream";
-                            String ext = extractExtensionFromContentType(ct);
-                            MultipartFile mf = toMultipart(in, ct, ext);
-                            return storage.store(mf);
+                            String realCt = (ct2 != null) ? ct2 : "application/octet-stream";
+                            String ext = extractExtensionFromContentType(realCt);
+                            MultipartFile mf = toMultipart(in, realCt, ext);
+                            String stored = storage.store(mf);
+                            if (realCt.startsWith("image/")) {
+                                if (foundImage == null) foundImage = stored;
+                                if (foundThumb == null)  foundThumb  = stored;
+                            } else if (realCt.startsWith("video/")) {
+                                if (foundVideo == null) foundVideo = stored;
+                            }
                         }
+                    } else {
+                        // POST 결과가 다시 HTML이면 추가 파싱
+                        String html2 = readAll(post.getInputStream());
+                        HtmlExtracted he2 = extractFromHtml(html2, actionAbs);
+                        if (he2.imageUrl != null && foundImage == null) foundImage = downloadToStorage(he2.imageUrl, startUrl);
+                        if (he2.thumbnailUrl != null && foundThumb == null) foundThumb = downloadToStorage(he2.thumbnailUrl, startUrl);
+                        if (he2.videoUrl != null && foundVideo == null) foundVideo = downloadToStorage(he2.videoUrl, startUrl);
                     }
-                    // POST 결과가 다시 HTML이면 한 번 더 링크 찾기
-                    String html2 = readAll(post.getInputStream());
-                    String cand2 = findDownloadUrlInHtml(html2, actionAbs);
-                    if (cand2 != null) {
-                        current = new URL(new URL(actionAbs), cand2).toString();
-                        htmlFollow++;
-                        continue;
-                    }
-                    throw new IOException("No image URL found in HTML after POST");
                 }
 
-                // (3) GET 링크가 있었는데 javascript: 이었으면 보정
-                if (candidate != null) {
-                    current = new URL(url, candidate).toString();
+                // 다음 후보 링크가 있으면 한번 더 따라가기
+                if (he.nextGetUrl != null) {
+                    current = new URL(url, he.nextGetUrl).toString();
                     htmlFollow++;
                     continue;
                 }
-
-                throw new IOException("No image URL found in HTML");
+                break;
             }
 
-            throw new IOException("Unsupported content type: " + contentType);
+            // 그 외 콘텐츠 타입은 포기
+            break;
         }
 
-        throw new IOException("Too many redirects");
+        if (foundImage == null && foundVideo == null) {
+            throw new IOException("이미지/영상 URL을 찾지 못했습니다.");
+        }
+        // 썸네일 없으면 이미지로 대체
+        if (foundThumb == null) foundThumb = foundImage;
+
+        return new AssetPair(foundImage, foundThumb, foundVideo, /*takenAt*/ null);
     }
 
-    // ===== 헬퍼/유틸 메소드 =====
+    /**
+     * Life4cut 전용 JSON/텍스트 응답 처리.
+     * 이미지와 비디오를 찾지 못하면 예외를 던진다.
+     */
+    private AssetPair fetchLife4cutAssets(String url) throws IOException {
+        HttpURLConnection conn = open(url, "GET", null, url);
+        String body = readAll(conn.getInputStream());
+
+        // 정규식으로 이미지/비디오 URL 추출
+        List<String> images = new ArrayList<>();
+        Matcher mImg = Pattern.compile("(https?://[^\\s\"']+\\.(?:png|jpe?g|gif|webp))",
+                Pattern.CASE_INSENSITIVE).matcher(body);
+        while (mImg.find()) {
+            images.add(mImg.group(1));
+        }
+        String video = null;
+        Matcher mVid = Pattern.compile("(https?://[^\\s\"']+\\.(?:mp4|mov|webm|m4v))",
+                Pattern.CASE_INSENSITIVE).matcher(body);
+        if (mVid.find()) video = mVid.group(1);
+
+        String storedImg = null;
+        String thumb = null;
+        if (!images.isEmpty()) {
+            storedImg = downloadToStorage(images.get(0), url);
+            thumb = storedImg;
+        }
+        String storedVideo = null;
+        if (video != null) {
+            storedVideo = downloadToStorage(video, url);
+        }
+
+        if (storedImg == null && storedVideo == null) {
+            throw new IOException("Life4cut 응답에서 이미지나 비디오를 찾지 못했습니다.");
+        }
+        return new AssetPair(storedImg, thumb, storedVideo, null);
+    }
+
+    /**
+     * 하루필름 전용 JSON 응답 처리.
+     * 키명을 알 수 없는 경우 life4cut 방식으로 fallback.
+     */
+    private AssetPair fetchHaruFilmAssets(String url) throws IOException {
+        HttpURLConnection conn = open(url, "GET", null, url);
+        String body = readAll(conn.getInputStream());
+        try {
+            JsonNode root = objectMapper.readTree(body);
+            List<String> imgs = new ArrayList<>();
+            if (root.has("imageUrls")) {
+                root.get("imageUrls").forEach(node -> imgs.add(node.asText()));
+            } else if (root.has("img_list")) {
+                root.get("img_list").forEach(node -> imgs.add(node.asText()));
+            }
+            String video = null;
+            if (root.has("videoUrl")) {
+                video = root.get("videoUrl").asText();
+            } else if (root.has("video")) {
+                video = root.get("video").asText();
+            }
+
+            String storedImg = null;
+            String thumb = null;
+            if (!imgs.isEmpty()) {
+                storedImg = downloadToStorage(imgs.get(0), url);
+                thumb = storedImg;
+            }
+            String storedVideo = null;
+            if (video != null && !video.isBlank()) {
+                storedVideo = downloadToStorage(video, url);
+            }
+
+            if (storedImg == null && storedVideo == null) {
+                throw new IOException("HaruFilm 응답에서 이미지나 비디오를 찾지 못했습니다.");
+            }
+            return new AssetPair(storedImg, thumb, storedVideo, null);
+        } catch (Exception ex) {
+            // JSON 파싱 실패 시 life4cut 방식으로 대체
+            return fetchLife4cutAssets(url);
+        }
+    }
+
+    private AssetPair storeFromNonUrlPayload(String payload) throws IOException {
+        // URL이 아닌 QR 포맷(예: base64, 커스텀 프로토콜 등)을 다루려면 여기 구현
+        throw new InvalidQrException("지원하지 않는 QR 포맷입니다.");
+    }
+
+    // ===================== HTML 파서 =====================
+
+    private HtmlExtracted extractFromHtml(String html, String baseUrl) {
+        Document doc = Jsoup.parse(html, baseUrl);
+
+        HtmlExtracted out = new HtmlExtracted();
+
+        out.imageUrl = firstMeta(doc,
+                "meta[property=og:image]", "meta[name=og:image]",
+                "meta[property=og:image:url]", "meta[property=og:image:secure_url]",
+                "meta[name=twitter:image]", "meta[name=twitter:image:src]",
+                "meta[itemprop=image]"
+        );
+        out.thumbnailUrl = firstMeta(doc,
+                "meta[property=og:image:thumbnail]", "meta[name=thumbnail]"
+        );
+
+        out.videoUrl = firstMeta(doc,
+                "meta[property=og:video]", "meta[name=og:video]",
+                "meta[property=og:video:url]", "meta[property=og:video:secure_url]",
+                "meta[name=twitter:player]"
+        );
+
+        // 다운로드 링크/버튼에서 image/video 키워드 추출
+        Elements links = doc.select("a[download], a#download, a.button, a, button, .btn, .button");
+        for (Element el : links) {
+            String text = (el.hasText() ? el.text() : "").toLowerCase(Locale.ROOT);
+            String href = el.attr("href");
+            String dataHref = el.attr("data-href");
+            String dataUrl  = el.attr("data-url");
+            String candidate = firstNonBlank(href, dataHref, dataUrl);
+
+            if (candidate == null || candidate.isBlank()) continue;
+
+            boolean looksImage = text.contains("image") || text.contains("이미지");
+            boolean looksVideo = text.contains("video") || text.contains("동영상");
+
+            if (looksImage && out.imageUrl == null) out.imageUrl = candidate;
+            if (looksVideo && out.videoUrl == null) out.videoUrl = candidate;
+            if (out.nextGetUrl == null) out.nextGetUrl = candidate; // 다음 단계 후보
+        }
+
+        // <video src> / <source src> 탐색 (직접 링크)
+        if (out.videoUrl == null) {
+            Element v = doc.selectFirst("video[src], video source[src]");
+            if (v != null) out.videoUrl = v.hasAttr("src") ? v.attr("src") : null;
+        }
+
+        // 마지막 fallback: 첫 번째 img
+        if (out.imageUrl == null) {
+            Element img = doc.selectFirst("img[src]");
+            if (img != null) out.imageUrl = img.attr("src");
+        }
+
+        // script 안의 정규식으로 jpg/mp4 스캔
+        for (Element s : doc.select("script")) {
+            String code = s.data();
+            if (out.imageUrl == null) {
+                Matcher m1 = Pattern.compile("(https?://[^\\s\"'>)]+\\.(?:png|jpe?g|gif|webp))",
+                        Pattern.CASE_INSENSITIVE).matcher(code);
+                if (m1.find()) out.imageUrl = m1.group(1);
+            }
+            if (out.videoUrl == null) {
+                Matcher m2 = Pattern.compile("(https?://[^\\s\"'>)]+\\.(?:mp4|mov|webm|m4v))",
+                        Pattern.CASE_INSENSITIVE).matcher(code);
+                if (m2.find()) out.videoUrl = m2.group(1);
+            }
+        }
+
+        // meta refresh
+        if (out.nextGetUrl == null) {
+            Element refresh = doc.selectFirst("meta[http-equiv=refresh][content]");
+            if (refresh != null) {
+                String content = refresh.attr("content"); // "0;url=/path"
+                int p = content.toLowerCase(Locale.ROOT).indexOf("url=");
+                if (p >= 0) out.nextGetUrl = content.substring(p + 4).trim();
+            }
+        }
+
+        return out;
+    }
+
+    // ===================== 네트워크/저장 공통 =====================
+
+    private String downloadToStorage(String absOrRelUrl, String referer) throws IOException {
+        URL abs = new URL(new URL(referer), absOrRelUrl);
+        HttpURLConnection conn = open(abs.toString(), "GET", null, referer);
+        String contentType = safeLower(conn.getContentType());
+        try (InputStream in = boundedStream(conn)) {
+            String ct = contentType != null ? contentType : "application/octet-stream";
+            String ext = extractExtensionFromContentType(ct);
+            MultipartFile mf = toMultipart(in, ct, ext);
+            return storage.store(mf);
+        }
+    }
 
     private HttpURLConnection open(String url, String method, String body, String referer) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
@@ -234,7 +437,9 @@ public class PhotoServiceImpl implements PhotoService {
         conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
         conn.setReadTimeout(READ_TIMEOUT_MS);
         conn.setRequestProperty("User-Agent", USER_AGENT);
-        conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml,image/avif,image/webp,image/*;q=0.9,*/*;q=0.8");
+        conn.setRequestProperty("Accept",
+                "text/html,application/xhtml+xml,application/xml," +
+                        "image/avif,image/webp,image/*;q=0.9,video/*;q=0.9,*/*;q=0.8");
         conn.setRequestProperty("Accept-Language", "ko,ko-KR;q=0.9,en-US;q=0.8,en;q=0.7");
         if (referer != null) conn.setRequestProperty("Referer", referer);
         conn.setRequestMethod(method);
@@ -243,12 +448,58 @@ public class PhotoServiceImpl implements PhotoService {
             conn.setDoOutput(true);
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
             conn.setRequestProperty("Content-Length", String.valueOf(bytes.length));
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(bytes);
-            }
+            try (OutputStream os = conn.getOutputStream()) { os.write(bytes); }
         }
         conn.connect();
+        // 여기서 바로 상태코드 판독
+        int code = conn.getResponseCode();
+        if (code == 400) {
+            throw new InvalidQrException("원격 서버가 요청을 거부했습니다. (400)");
+        }
+        if (code == 404 || code == 410) {
+            throw new ExpiredQrException("원격 자원이 존재하지 않습니다. (HTTP " + code + ")");
+        }
         return conn;
+    }
+
+    private InputStream boundedStream(HttpURLConnection conn) throws IOException {
+        long len = conn.getContentLengthLong();
+        if (len > 0 && len > MAX_BYTES) throw new IOException("File too large: " + len);
+        return new LimitedInputStream(conn.getInputStream(), MAX_BYTES);
+    }
+
+    private MultipartFile toMultipart(InputStream in, String contentType, String ext) throws IOException {
+        byte[] data = in.readAllBytes();
+        if (data.length > MAX_BYTES) throw new IOException("File too large after download");
+        return new MultipartFile() {
+            @Override public String getName() { return "file"; }
+            @Override public String getOriginalFilename() { return java.util.UUID.randomUUID() + ext; }
+            @Override public String getContentType() { return contentType; }
+            @Override public boolean isEmpty() { return data.length == 0; }
+            @Override public long getSize() { return data.length; }
+            @Override public byte[] getBytes() { return data; }
+            @Override public InputStream getInputStream() { return new java.io.ByteArrayInputStream(data); }
+            @Override public void transferTo(java.io.File dest) throws IOException {
+                try (var fos = new java.io.FileOutputStream(dest)) { fos.write(data); }
+            }
+        };
+    }
+
+    private String extractExtensionFromContentType(String contentType) {
+        if (contentType == null) return ".bin";
+        int slash = contentType.indexOf('/');
+        if (slash >= 0 && slash + 1 < contentType.length()) {
+            String subtype = contentType.substring(slash + 1).toLowerCase(Locale.ROOT);
+            if (subtype.contains("jpeg") || subtype.contains("jpg")) return ".jpg";
+            if (subtype.contains("png"))  return ".png";
+            if (subtype.contains("gif"))  return ".gif";
+            if (subtype.contains("webp")) return ".webp";
+            if (subtype.contains("mp4"))  return ".mp4";
+            if (subtype.contains("webm")) return ".webm";
+            if (subtype.contains("mov"))  return ".mov";
+            return "." + subtype.replaceAll("[^a-z0-9.+-]", "");
+        }
+        return ".bin";
     }
 
     private boolean looksLikeUrl(String s) {
@@ -258,114 +509,19 @@ public class PhotoServiceImpl implements PhotoService {
 
     private boolean isAllowedScheme(URL url) {
         String p = url.getProtocol().toLowerCase(Locale.ROOT);
-        for (String s : ALLOWED_SCHEMES) {
-            if (p.equals(s)) return true;
-        }
+        for (String s : ALLOWED_SCHEMES) if (p.equals(s)) return true;
         return false;
     }
 
-    private boolean isRedirect(int code) {
-        return code >= 300 && code < 400;
-    }
+    private String safeLower(String s) { return (s == null) ? null : s.toLowerCase(Locale.ROOT); }
 
-    private String resolve(URL base, String location) throws IOException {
-        // 상대경로 보정
-        return new URL(base, location).toString();
-    }
-
-    private String safeLower(String s) {
-        return (s == null) ? null : s.toLowerCase(Locale.ROOT);
-    }
-
-    /** HTML에서 og:image 또는 '이미지 다운로드' 흐름의 URL을 찾아 절대 URL로 반환 */
-    private String tryExtractImageFromHtml(HttpURLConnection conn, URL baseUrl) {
-        try (InputStream in = conn.getInputStream()) {
-            String html = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            Document doc = Jsoup.parse(html);
-
-            // 1) og:image 우선
-            Element og = doc.selectFirst("meta[property=og:image], meta[name=og:image]");
-            if (og != null) {
-                String c = og.hasAttr("content") ? og.attr("content") : null;
-                if (c != null && !c.isBlank()) {
-                    return new URL(baseUrl, c).toString(); // 상대경로 보정
-                }
-            }
-            // 2) 첫 번째 <img>
-            Element img = doc.selectFirst("img[src]");
-            if (img != null) {
-                String src = img.attr("src");
-                if (src != null && !src.isBlank()) {
-                    return new URL(baseUrl, src).toString();
-                }
-            }
-        } catch (Exception ignored) {}
-        return null;
-    }
-
-    /** HTML에서 '이미지 다운로드' 흐름을 추정해 URL을 찾는다 */
-    private String findDownloadUrlInHtml(String html, String baseUrl) {
-        Document doc = Jsoup.parse(html, baseUrl);
-
-        // 1) 메타 이미지들
-        String m = firstMeta(doc,
-                "meta[property=og:image]",
-                "meta[name=og:image]",
-                "meta[property=og:image:url]",
-                "meta[property=og:image:secure_url]",
-                "meta[name=twitter:image]",
-                "meta[name=twitter:image:src]",
-                "meta[itemprop=image]"
-        );
-        if (m != null) return m;
-
-        // 2) 명시적 다운로드 링크/버튼
-        Elements aTags = doc.select("a[download], a#download, a.button:matches((?i)image), a:matches((?i)다운로드|download)");
-        for (Element a : aTags) {
-            String href = a.attr("href");
-            if (!href.isBlank()) return href;
-            String dh = a.attr("data-href");
-            if (!dh.isBlank()) return dh;
-            String du = a.attr("data-url");
-            if (!du.isBlank()) return du;
+    private String sha256Hex(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(md.digest(input.getBytes()));
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
         }
-
-        Elements btns = doc.select("button, .btn, .button");
-        for (Element b : btns) {
-            String text = b.text();
-            if (!(text.toLowerCase(Locale.ROOT).contains("image")
-                    || text.contains("이미지") || text.contains("다운로드"))) continue;
-            String u = b.attr("data-href");
-            if (!u.isBlank()) return u;
-            u = b.attr("data-url");
-            if (!u.isBlank()) return u;
-        }
-
-        // 3) meta refresh
-        Element refresh = doc.selectFirst("meta[http-equiv=refresh][content]");
-        if (refresh != null) {
-            String content = refresh.attr("content"); // "0;url=/download"
-            int p = content.toLowerCase(Locale.ROOT).indexOf("url=");
-            if (p >= 0) return content.substring(p + 4).trim();
-        }
-
-        // 4) 스크립트 내 정규식
-        for (Element s : doc.select("script")) {
-            String code = s.data();
-            Matcher m1 = Pattern.compile("(https?://[^\\s\"'>)]+\\.(?:png|jpe?g|gif|webp))",
-                    Pattern.CASE_INSENSITIVE).matcher(code);
-            if (m1.find()) return m1.group(1);
-
-            Matcher m2 = Pattern.compile("(?:href|url)\\s*[:=]\\s*[\"']([^\"']+?download[^\"']*)[\"']",
-                    Pattern.CASE_INSENSITIVE).matcher(code);
-            if (m2.find()) return m2.group(1);
-        }
-
-        // 5) 마지막 fallback: 첫 번째 <img>
-        Element img = doc.selectFirst("img[src]");
-        if (img != null) return img.attr("src");
-
-        return null;
     }
 
     private String firstMeta(Document doc, String... selectors) {
@@ -379,89 +535,44 @@ public class PhotoServiceImpl implements PhotoService {
         return null;
     }
 
-    /** Content-Length로 사전 차단 + 스트림 읽는 동안 사이즈 제한 */
-    private InputStream boundedStream(HttpURLConnection conn) throws IOException {
-        long len = conn.getContentLengthLong();
-        if (len > 0 && len > MAX_IMAGE_BYTES) {
-            throw new IOException("Image too large: " + len);
-        }
-        // Content-Length가 없으면 읽으면서 제한
-        InputStream raw = conn.getInputStream();
-        return new LimitedInputStream(raw, MAX_IMAGE_BYTES);
+    private static String firstNonBlank(String... v) {
+        for (String s : v) if (s != null && !s.isBlank()) return s;
+        return null;
     }
 
-    /** image/png → .png, image/jpeg → .jpg, 그 외 서브타입 → .subtype */
-    private String extractExtensionFromContentType(String contentType) {
-        if (contentType == null) return ".img";
-        int slash = contentType.indexOf('/');
-        if (slash >= 0 && slash + 1 < contentType.length()) {
-            String subtype = contentType.substring(slash + 1).toLowerCase(Locale.ROOT);
-            if (subtype.contains("jpeg") || subtype.contains("jpg")) return ".jpg";
-            if (subtype.contains("png"))  return ".png";
-            if (subtype.contains("gif"))  return ".gif";
-            if (subtype.contains("webp")) return ".webp";
-            return "." + subtype.replaceAll("[^a-z0-9.+-]", "");
-        }
-        return ".img";
+    private String inferBrand(String urlOrPayload) {
+        String s = urlOrPayload.toLowerCase(Locale.ROOT);
+        if (s.contains("인생네컷") || s.contains("life4cut")) return "인생네컷";
+        if (s.contains("하루필름") || s.contains("harufilm")) return "하루필름";
+        if (s.contains("photogray") || s.contains("pgshort")) return "포토그레이";
+        if (s.contains("exit") || s.contains("photoqr3")) return "엑시트";
+        if (s.contains("photoism")) return "포토이즘";
+        if (s.contains("signature")) return "포토시그니쳐";
+        if (s.contains("howdyoudo") || s.contains("하우두유두")) return "하우두유두";
+        if (s.contains("twin") || s.contains("트윈")) return "트윈포토";
+        return null;
     }
 
-    /** InputStream 전체를 UTF-8 문자열로 읽기 */
-    private String readAll(InputStream in) throws IOException {
-        try (in) {
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    // ======= 내부 타입/헬퍼 =======
+
+    private static class AssetPair {
+        final String imageUrl;
+        final String thumbnailUrl;
+        final String videoUrl;
+        final LocalDateTime takenAt;
+        AssetPair(String i, String t, String v, LocalDateTime ta) {
+            this.imageUrl = i; this.thumbnailUrl = t; this.videoUrl = v; this.takenAt = ta;
         }
     }
 
-
-    /** InputStream -> MultipartFile (메모리 보관) */
-    private MultipartFile toMultipart(InputStream in, String contentType, String ext) throws IOException {
-        byte[] data = in.readAllBytes();
-        if (data.length > MAX_IMAGE_BYTES) {
-            throw new IOException("Image too large after download");
-        }
-        return new MultipartFile() {
-            @Override public String getName() { return "photo"; }
-            @Override public String getOriginalFilename() { return java.util.UUID.randomUUID() + ext; }
-            @Override public String getContentType() { return contentType; }
-            @Override public boolean isEmpty() { return data.length == 0; }
-            @Override public long getSize() { return data.length; }
-            @Override public byte[] getBytes() { return data; }
-            @Override public java.io.InputStream getInputStream() {
-                return new java.io.ByteArrayInputStream(data);
-            }
-            @Override public void transferTo(java.io.File dest) throws IOException {
-                try (var fos = new java.io.FileOutputStream(dest)) {
-                    fos.write(data);
-                }
-            }
-        };
+    private static class HtmlExtracted {
+        String imageUrl;
+        String thumbnailUrl;
+        String videoUrl;
+        String nextGetUrl;
+        PostForm postForm;
     }
 
-    /** 다운로드 중 용량 제한을 강제하는 래퍼 */
-    private static class LimitedInputStream extends java.io.FilterInputStream {
-        private long remaining;
-        protected LimitedInputStream(InputStream in, long maxBytes) {
-            super(in);
-            this.remaining = maxBytes;
-        }
-        @Override
-        public int read() throws IOException {
-            if (remaining <= 0) throw new IOException("Image exceeds limit");
-            int b = super.read();
-            if (b != -1) remaining--;
-            return b;
-        }
-        @Override
-        public int read(byte[] b, int off, int len) throws IOException {
-            if (remaining <= 0) throw new IOException("Image exceeds limit");
-            len = (int) Math.min(len, remaining);
-            int n = super.read(b, off, len);
-            if (n > 0) remaining -= n;
-            return n;
-        }
-    }
-
-    /** 다운로드용 폼 표현 */
     private static class PostForm {
         String action;
         Map<String, String> fields = new LinkedHashMap<>();
@@ -476,46 +587,42 @@ public class PhotoServiceImpl implements PhotoService {
         }
     }
 
-    /** HTML에서 POST 폼(다운로드용) 탐색 및 데이터 구성 */
-    private PostForm findPostForm(String html) {
-        Document doc = Jsoup.parse(html);
-        Element form = doc.selectFirst("form[method=post], form:matches((?i)download)");
-        if (form == null) return null;
-        PostForm pf = new PostForm();
-        pf.action = form.hasAttr("action") ? form.attr("action") : null;
-        for (Element in : form.select("input[name]")) {
-            String name = in.attr("name");
-            String val = in.hasAttr("value") ? in.attr("value") : "";
-            pf.fields.put(name, val);
+    private static class LimitedInputStream extends java.io.FilterInputStream {
+        private long remaining;
+        protected LimitedInputStream(InputStream in, long maxBytes) {
+            super(in); this.remaining = maxBytes;
         }
-        Element submit = form.selectFirst("button[type=submit], input[type=submit]");
-        if (submit != null && submit.hasAttr("name")) {
-            pf.fields.put(submit.attr("name"), submit.hasAttr("value") ? submit.attr("value") : "");
+        @Override public int read() throws IOException {
+            if (remaining <= 0) throw new IOException("Limit exceeded");
+            int b = super.read(); if (b != -1) remaining--; return b;
         }
-        return pf;
-    }
-
-    private boolean isProbablyGet(String href) {
-        return href != null && !href.trim().toLowerCase(Locale.ROOT).startsWith("javascript:");
-    }
-
-    // URL이 아닌 payload 처리 전략이 필요하면 구현
-    private String storeFromNonUrlPayload(String payload) {
-        // 예: payload 기반 생성/업로드 등
-        return "";
-    }
-
-    private String sha256Hex(String input) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            return HexFormat.of().formatHex(md.digest(input.getBytes()));
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
+        @Override public int read(byte[] b, int off, int len) throws IOException {
+            if (remaining <= 0) throw new IOException("Limit exceeded");
+            len = (int) Math.min(len, remaining);
+            int n = super.read(b, off, len);
+            if (n > 0) remaining -= n;
+            return n;
         }
     }
 
-    @Override
-    @Transactional(readOnly = true)
+    /**
+     * InputStream 전체를 문자열로 읽어오는 헬퍼 메서드.
+     * 기존 코드에 없어서 추가.
+     */
+    private String readAll(InputStream in) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        try (InputStream is = in) {
+            byte[] buffer = new byte[8192];
+            int n;
+            while ((n = is.read(buffer)) != -1) {
+                sb.append(new String(buffer, 0, n, StandardCharsets.UTF_8));
+            }
+        }
+        return sb.toString();
+    }
+
+    // 목록/삭제 (기존과 동일)
+    @Override @Transactional(readOnly = true)
     public Page<PhotoResponseDto> list(Long userId, Pageable pageable) {
         return photoRepository
                 .findByUserIdAndDeletedIsFalseOrderByCreatedAtDesc(userId, pageable)
@@ -526,9 +633,7 @@ public class PhotoServiceImpl implements PhotoService {
     public void delete(Long userId, Long photoId) {
         Photo photo = photoRepository.findById(photoId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사진입니다."));
-        if (!photo.getUserId().equals(userId)) {
-            throw new IllegalStateException("삭제 권한이 없습니다.");
-        }
+        if (!photo.getUserId().equals(userId)) throw new IllegalStateException("삭제 권한이 없습니다.");
         photo.setDeleted(true);
         photoRepository.save(photo);
     }
