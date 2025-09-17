@@ -19,6 +19,15 @@ class _EmailLoginFormState extends State<EmailLoginForm> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  // 붙여넣기/자동완성으로 들어온 전각 문자/nbsp/앞뒤 공백 정리
+  String _normalizeEmail(String input) => input
+      .replaceAll('＠', '@')
+      .replaceAll('．', '.')
+      .replaceAll('\u00A0', ' ')
+      .trim();
+  // TLD 길이 제한 없음, 일반적인 특수문자 허용
+  final RegExp _emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -27,13 +36,9 @@ class _EmailLoginFormState extends State<EmailLoginForm> {
   }
 
   String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return '이메일을 입력해주세요';
-    }
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}\$');
-    if (!emailRegex.hasMatch(value)) {
-      return '올바른 이메일 형식을 입력해주세요';
-    }
+    final v = _normalizeEmail(value ?? '');
+    if (v.isEmpty) return '이메일을 입력해주세요';
+    if (!_emailRegex.hasMatch(v)) return '올바른 이메일 형식을 입력해주세요';
     return null;
   }
 
