@@ -3,7 +3,6 @@ package com.nemo.backend.domain.user.controller;
 import com.nemo.backend.domain.auth.dto.*;
 import com.nemo.backend.domain.auth.service.AuthService;
 import com.nemo.backend.domain.auth.jwt.JwtTokenProvider;
-import com.nemo.backend.domain.auth.token.RefreshTokenRepository;
 import com.nemo.backend.global.exception.ApiException;
 import com.nemo.backend.global.exception.ErrorCode;
 import org.springframework.http.HttpStatus;
@@ -13,22 +12,20 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
- * 인증/계정 관련 엔드포인트. 로그인/회원가입은 공개,
- * 로그아웃은 현재 사용자 식별 후 refresh 토큰을 제거.
+ * Controller hosted under the user domain that exposes authentication
+ * endpoints.  This indirection allows us to avoid touching the auth
+ * controller paths (/api/auth) while still delegating to {@link AuthService}
+ * for the underlying business logic.
  */
 @RestController
 @RequestMapping("/api/users")
 public class UserAuthController {
     private final AuthService authService;
     private final JwtTokenProvider jwtTokenProvider;
-    private final RefreshTokenRepository refreshTokenRepository;
 
-    public UserAuthController(AuthService authService,
-                              JwtTokenProvider jwtTokenProvider,
-                              RefreshTokenRepository refreshTokenRepository) {
+    public UserAuthController(AuthService authService, JwtTokenProvider jwtTokenProvider) {
         this.authService = authService;
         this.jwtTokenProvider = jwtTokenProvider;
-        this.refreshTokenRepository = refreshTokenRepository;
     }
 
     @PostMapping("/signup")
@@ -46,7 +43,7 @@ public class UserAuthController {
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(HttpServletRequest request) {
         Long userId = extractUserId(request);
-        authService.logout(userId); // 내부에서 refresh 토큰 삭제
+        authService.logout(userId);
         return ResponseEntity.noContent().build();
     }
 
@@ -59,13 +56,6 @@ public class UserAuthController {
         if (!jwtTokenProvider.validateToken(token)) {
             throw new ApiException(ErrorCode.UNAUTHORIZED);
         }
-        Long userId = jwtTokenProvider.getUserId(token);
-
-        // 로그아웃 후 재호출 방지: refresh 없으면 401
-        boolean hasRefresh = refreshTokenRepository.findFirstByUserId(userId).isPresent();
-        if (!hasRefresh) {
-            throw new ApiException(ErrorCode.UNAUTHORIZED);
-        }
-        return userId;
+        return jwtTokenProvider.getUserId(token);
     }
 }

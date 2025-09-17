@@ -9,7 +9,7 @@ import 'api_client.dart';
 class AuthService {
   // ✅ 서버 URL 설정 (로컬 or 배포 서버로 교체해야 함)
   static const String baseUrl =
-      'http://10.0.2.2:8080'; // ← TODO: 실제 주소로 바꿔!
+      'https://nemo-backend.onrender.com'; // ← TODO: 실제 주소로 바꿔!
 
   // JWT 토큰 저장소
   static String? _accessToken;
