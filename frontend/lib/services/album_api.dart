@@ -405,8 +405,10 @@ class AlbumApi {
   // 대신 PUT /api/albums/{albumId}에서 coverPhotoId를 설정할 수 있습니다.
   // static Future<void> setCoverPhoto({ ... }) async { ... }
 
-  // POST /api/albums/{albumId}/thumbnail (multipart: photoId 또는 file)
-  // 백엔드 명세: multipart/form-data에서 photoId (Long) 또는 file (MultipartFile) 사용
+  // POST /api/albums/{albumId}/thumbnail
+  // 백엔드 명세:
+  // - JSON(photoId): photoId만 있을 때 또는 둘 다 없을 때 (자동 썸네일 지정)
+  // - multipart(file): 파일 업로드 시 (uploadThumbnailFile 사용)
   static Future<Map<String, dynamic>> setThumbnail({
     required int albumId,
     int? photoId,
@@ -422,19 +424,19 @@ class AlbumApi {
         'message': '앨범 썸네일이 성공적으로 설정되었습니다.',
       };
     }
-    // 백엔드 명세: multipart/form-data로 photoId 전송
+
+    // 백엔드 명세: JSON으로 전송 (8-1)
+    // photoId가 있으면 해당 사진을 썸네일로 지정
+    // photoId가 없으면 앨범 내 최신 사진 기준으로 자동 썸네일 지정
     final uri = _uri('/api/albums/$albumId/thumbnail');
-    final req = http.MultipartRequest('POST', uri);
-    final token = AuthService.accessToken;
-    if (token != null) req.headers['Authorization'] = 'Bearer $token';
+    final headers = _headersJson();
 
-    if (photoId != null) {
-      // photoId를 multipart field로 전송
-      req.fields['photoId'] = photoId.toString();
-    }
+    final body = photoId != null
+        ? jsonEncode({'photoId': photoId})
+        : jsonEncode({}); // 빈 body로 자동 썸네일 지정
 
-    final streamed = await req.send();
-    final res = await http.Response.fromStream(streamed);
+    final res = await http.post(uri, headers: headers, body: body);
+
     if (res.statusCode == 200) {
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
