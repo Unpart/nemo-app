@@ -820,6 +820,42 @@ class AlbumApi {
     if (res.statusCode == 404) throw Exception('ALBUM_NOT_FOUND');
     throw Exception('Failed to unshare (${res.statusCode})');
   }
+
+  // GET /api/albums/{albumId}/download-urls
+  static Future<Map<String, dynamic>> getAlbumDownloadUrls(int albumId) async {
+    if (AppConstants.useMockApi) {
+      await Future.delayed(
+        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
+      );
+      return {
+        'albumId': albumId,
+        'albumTitle': '모킹 앨범',
+        'photoCount': 5,
+        'photos': List.generate(
+          5,
+          (i) => {
+            'photoId': 100 + i,
+            'sequence': i,
+            'downloadUrl': 'https://picsum.photos/id/${100 + i}/600/800',
+            'filename': 'nemo_${100 + i}.jpg',
+            'fileSize': 283749,
+          },
+        ),
+      };
+    }
+
+    final res = await ApiClient.get('/api/albums/$albumId/download-urls');
+    if (res.statusCode == 200) {
+      return jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    if (res.statusCode == 403) {
+      throw Exception('해당 앨범의 사진을 다운로드할 권한이 없습니다.');
+    }
+    if (res.statusCode == 404) {
+      throw Exception('ALBUM_NOT_FOUND');
+    }
+    throw Exception('Failed to get album download URLs (${res.statusCode})');
+  }
 }
 
 extension AlbumSharing on AlbumApi {
