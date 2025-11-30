@@ -58,30 +58,46 @@ class _PhotoEditScreenState extends State<PhotoEditScreen> {
     try {
       final api = PhotoApi();
       final res = await api.getPhoto(widget.photoId);
-      _imageUrl = (res['imageUrl'] ?? '') as String;
-      _locationCtrl.text = (res['location'] as String?) ?? '';
-      _brandCtrl.text = (res['brand'] as String?) ?? '';
-      _tags = (res['tagList'] as List?)?.cast<String>() ?? [];
-      _memoCtrl.text = (res['memo'] as String?) ?? '';
-      // 초기 브랜드를 옵션에 맞게 선택 상태로 설정
-      final currentBrand = _brandCtrl.text.trim();
-      if (currentBrand.isNotEmpty && _brandOptions.contains(currentBrand)) {
-        _selectedBrand = currentBrand;
-      } else {
-        _selectedBrand = '직접 입력';
+      
+      // 모든 데이터 로드
+      final brandValue = (res['brand'] as String?) ?? '';
+      final locationValue = (res['location'] as String?) ?? '';
+      
+      // setState 내에서 모든 상태 변경을 한 번에 처리
+      if (mounted) {
+        setState(() {
+          _imageUrl = (res['imageUrl'] ?? '') as String;
+          _locationCtrl.text = locationValue;
+          _brandCtrl.text = brandValue;
+          _tags = (res['tagList'] as List?)?.cast<String>() ?? [];
+          _memoCtrl.text = (res['memo'] as String?) ?? '';
+          
+          // 초기 브랜드를 옵션에 맞게 선택 상태로 설정
+          final currentBrand = brandValue.trim();
+          if (currentBrand.isNotEmpty && _brandOptions.contains(currentBrand)) {
+            // 기존 브랜드가 옵션에 있으면 → 그 옵션이 자동 선택
+            _selectedBrand = currentBrand;
+            // 명시적으로 브랜드 컨트롤러 값 설정 (일관성 유지)
+            _brandCtrl.text = currentBrand;
+          } else {
+            // 옵션에 없으면 → "직접 입력" 상태 + 기존 문자열 그대로 유지
+            _selectedBrand = '직접 입력';
+            // _brandCtrl.text는 이미 brandValue로 설정되어 있으므로 그대로 유지
+          }
+
+          // 촬영일시 파싱
+          final t = res['takenAt'] as String?;
+          _takenAt = t != null ? DateTime.tryParse(t) : null;
+
+          // 친구 목록에서 ID 추출
+          final friends = (res['friendList'] as List?) ?? const [];
+          _selectedFriendIds = friends
+              .whereType<Map>()
+              .map((e) => e['userId'] as int?)
+              .whereType<int>()
+              .toSet();
+        });
       }
-
-      // 촬영일시 파싱
-      final t = res['takenAt'] as String?;
-      _takenAt = t != null ? DateTime.tryParse(t) : null;
-
-      // 친구 목록에서 ID 추출
-      final friends = (res['friendList'] as List?) ?? const [];
-      _selectedFriendIds = friends
-          .whereType<Map>()
-          .map((e) => e['userId'] as int?)
-          .whereType<int>()
-          .toSet();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
