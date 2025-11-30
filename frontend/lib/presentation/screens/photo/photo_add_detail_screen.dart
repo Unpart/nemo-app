@@ -101,12 +101,15 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
   }
 
   /// 브랜드 선택 시, 해당 브랜드의 주변 지점 중 가장 가까운 곳을 위치로 자동 채움
-  /// - 이미 위치가 입력되어 있으면 건드리지 않음
+  /// - 브랜드를 선택했을 때는 이미 위치가 있어도 덮어쓰기
   /// - 권한 거부/실패 시 조용히 무시
-  Future<void> _updateLocationByBrand(String brand) async {
+  Future<void> _updateLocationByBrand(
+    String brand, {
+    bool forceUpdate = false,
+  }) async {
     if (!mounted) return;
-    // 이미 사용자가 직접 위치를 입력해둔 경우는 덮어쓰지 않음
-    if (_locationCtrl.text.trim().isNotEmpty) return;
+    // 브랜드를 선택한 경우에는 이미 위치가 있어도 덮어쓰기
+    if (!forceUpdate && _locationCtrl.text.trim().isNotEmpty) return;
 
     try {
       LocationPermission permission = await Geolocator.checkPermission();
@@ -170,7 +173,8 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
 
       if (best is! Map) return;
       if (!mounted) return;
-      if (_locationCtrl.text.trim().isNotEmpty) return;
+      // 브랜드 선택 시에는 덮어쓰기 허용
+      if (!forceUpdate && _locationCtrl.text.trim().isNotEmpty) return;
 
       // 백엔드 응답 형식에 맞춰 brand/branch 조합 우선 사용
       final bestBrand = best['brand'] as String?;
@@ -198,6 +202,7 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
   /// 현재 위치와 네이버 지도 API(MapApi.getViewport)를 사용해
   /// 위치 기본값을 "현재 위치 근처 포토부스"로 설정
   /// - 이미 위치가 입력되어 있으면 건드리지 않음
+  /// - 브랜드가 자동 인식되면 해당 브랜드로 주변 검색
   /// - 권한 거부/실패 시 조용히 무시
   /// - 갤러리 업로드 시에만 사용 (QR 업로드는 브랜드 선택 시 자동 채움)
   Future<void> _initDefaultLocationFromMap() async {
@@ -224,6 +229,8 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
       final lat = position.latitude;
       final lng = position.longitude;
 
+      // 브랜드가 이미 설정되어 있으면 해당 브랜드로 필터링
+      final currentBrand = _brandCtrl.text.trim();
       final response = await MapApi.getViewport(
         neLat: lat + delta,
         neLng: lng + delta,
@@ -232,15 +239,29 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
         zoom: 15,
         cluster: true,
         limit: 50,
+        brand: currentBrand.isNotEmpty ? currentBrand : null, // 브랜드가 있으면 필터링
       );
 
       if (!mounted) return;
       final items = response['items'] as List<dynamic>? ?? const [];
       if (items.isEmpty) return;
 
+      // 브랜드가 설정되어 있으면 해당 브랜드만 필터링
+      List<dynamic> filteredItems = items;
+      if (currentBrand.isNotEmpty) {
+        filteredItems = items.where((item) {
+          if (item is! Map) return false;
+          final itemName = item['name'] as String? ?? '';
+          final itemBrand = item['brand'] as String? ?? '';
+          return itemName.contains(currentBrand) || itemBrand == currentBrand;
+        }).toList();
+      }
+
+      if (filteredItems.isEmpty) return;
+
       // distanceMeter가 있는 경우 가장 가까운 포토부스를 사용
-      dynamic best = items.first;
-      for (final item in items) {
+      dynamic best = filteredItems.first;
+      for (final item in filteredItems) {
         if (item is Map &&
             item['cluster'] != true &&
             item.containsKey('distanceMeter') &&
@@ -274,6 +295,17 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
 
       if (locationText != null && locationText.isNotEmpty) {
         _locationCtrl.text = locationText;
+      }
+
+      // 브랜드가 자동 인식되었고 브랜드 필드가 비어있으면 브랜드도 채움
+      if (brand != null && brand.isNotEmpty && _brandCtrl.text.trim().isEmpty) {
+        _brandCtrl.text = brand;
+        // 드롭다운에도 반영
+        if (_brandOptions.contains(brand)) {
+          setState(() {
+            _selectedBrand = brand;
+          });
+        }
       }
     } catch (_) {
       // 위치/지도 로딩 실패 시 무시 (기본값 미설정 상태로 두기)
@@ -759,9 +791,9 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
                         }
                       });
 
-                      // 브랜드를 선택한 경우에만 위치 자동 채움
+                      // 브랜드를 선택한 경우에만 위치 자동 채움 (이미 위치가 있어도 덮어쓰기)
                       if (value != '직접 입력') {
-                        await _updateLocationByBrand(value);
+                        await _updateLocationByBrand(value, forceUpdate: true);
                       }
                     },
                   ),
