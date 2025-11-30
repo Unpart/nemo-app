@@ -46,11 +46,7 @@ class _PhotoEditScreenState extends State<PhotoEditScreen> {
     super.initState();
     _load();
     _loadFriends();
-    // 위치가 없는 경우, 현재 위치 기반 네이버 지도 데이터를 사용해 기본값 설정
-    // (브랜드 선택 시 자동 채움도 지원하지만, 편집 시에는 기존 값이 있으면 덮어쓰지 않음)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initDefaultLocationFromMap();
-    });
+    // _initDefaultLocationFromMap은 _load() 완료 후에 호출하도록 변경
   }
 
   Future<void> _load() async {
@@ -97,6 +93,11 @@ class _PhotoEditScreenState extends State<PhotoEditScreen> {
               .whereType<int>()
               .toSet();
         });
+        
+        // 데이터 로드 완료 후, 위치가 비어있을 때만 자동 채움
+        if (locationValue.trim().isEmpty) {
+          _initDefaultLocationFromMap();
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -235,6 +236,7 @@ class _PhotoEditScreenState extends State<PhotoEditScreen> {
   /// 현재 위치와 네이버 지도 API(MapApi.getViewport)를 사용해
   /// 위치 기본값을 "현재 위치 근처 포토부스"로 설정
   /// - 이미 위치가 입력되어 있으면 건드리지 않음
+  /// - 브랜드가 자동 인식되면 해당 브랜드로 주변 검색
   /// - 권한 거부/실패 시 조용히 무시
   Future<void> _initDefaultLocationFromMap() async {
     if (!mounted) return;
@@ -260,6 +262,8 @@ class _PhotoEditScreenState extends State<PhotoEditScreen> {
       final lat = position.latitude;
       final lng = position.longitude;
 
+      // 브랜드가 이미 설정되어 있으면 해당 브랜드로 필터링
+      final currentBrand = _brandCtrl.text.trim();
       final response = await MapApi.getViewport(
         neLat: lat + delta,
         neLng: lng + delta,
@@ -268,15 +272,29 @@ class _PhotoEditScreenState extends State<PhotoEditScreen> {
         zoom: 15,
         cluster: true,
         limit: 50,
+        brand: currentBrand.isNotEmpty ? currentBrand : null, // 브랜드가 있으면 필터링
       );
 
       if (!mounted) return;
       final items = response['items'] as List<dynamic>? ?? const [];
       if (items.isEmpty) return;
 
+      // 브랜드가 설정되어 있으면 해당 브랜드만 필터링
+      List<dynamic> filteredItems = items;
+      if (currentBrand.isNotEmpty) {
+        filteredItems = items.where((item) {
+          if (item is! Map) return false;
+          final itemName = item['name'] as String? ?? '';
+          final itemBrand = item['brand'] as String? ?? '';
+          return itemName.contains(currentBrand) || itemBrand == currentBrand;
+        }).toList();
+      }
+
+      if (filteredItems.isEmpty) return;
+
       // distanceMeter가 있는 경우 가장 가까운 포토부스를 사용
-      dynamic best = items.first;
-      for (final item in items) {
+      dynamic best = filteredItems.first;
+      for (final item in filteredItems) {
         if (item is Map &&
             item['cluster'] != true &&
             item.containsKey('distanceMeter') &&
@@ -310,6 +328,17 @@ class _PhotoEditScreenState extends State<PhotoEditScreen> {
 
       if (locationText != null && locationText.isNotEmpty) {
         _locationCtrl.text = locationText;
+      }
+
+      // 브랜드가 자동 인식되었고 브랜드 필드가 비어있으면 브랜드도 채움
+      if (brand != null && brand.isNotEmpty && _brandCtrl.text.trim().isEmpty) {
+        _brandCtrl.text = brand;
+        // 드롭다운에도 반영
+        if (_brandOptions.contains(brand)) {
+          setState(() {
+            _selectedBrand = brand;
+          });
+        }
       }
     } catch (_) {
       // 위치/지도 로딩 실패 시 무시 (기본값 미설정 상태로 두기)
