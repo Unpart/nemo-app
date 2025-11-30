@@ -1145,7 +1145,8 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
           final scale = _pressedIndex == i ? 0.96 : 1.0;
 
           // AlbumProvider에서 즐겨찾기 및 공유 상태 가져오기
-          final albumProvider = context.read<AlbumProvider>();
+          // context.watch를 사용하여 AlbumProvider 변경 시 자동 업데이트
+          final albumProvider = context.watch<AlbumProvider>();
           final isFavorited =
               albumProvider.isFavorited(albumId) ||
               (a['favorited'] as bool?) == true;
@@ -1216,6 +1217,11 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
                           try {
                             await AlbumApi.favoriteAlbum(albumId);
                             if (!mounted) return;
+                            // AlbumProvider 즉시 업데이트하여 UI에 바로 반영
+                            context.read<AlbumProvider>().setFavorite(
+                              albumId,
+                              true,
+                            );
                             setState(() {
                               final idx = _albums.indexWhere(
                                 (e) => e['albumId'] == albumId,
@@ -1237,6 +1243,11 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
                           try {
                             await AlbumApi.unfavoriteAlbum(albumId);
                             if (!mounted) return;
+                            // AlbumProvider 즉시 업데이트하여 UI에 바로 반영
+                            context.read<AlbumProvider>().setFavorite(
+                              albumId,
+                              false,
+                            );
                             setState(() {
                               final idx = _albums.indexWhere(
                                 (e) => e['albumId'] == albumId,
