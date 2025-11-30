@@ -754,16 +754,20 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   Widget _buildActionsMenu(BuildContext context) {
     // 역할별 허용 액션 계산
     final role = _myRole ?? 'VIEWER';
-    final isOwnerLike = role == 'OWNER' || role == 'CO_OWNER';
+    final isOwner = role == 'OWNER';
+    final isCoOwner = role == 'CO_OWNER';
     final isEditor = role == 'EDITOR';
-    final showShare =
-        role == 'OWNER' || role == 'CO_OWNER'; // OWNER와 CO_OWNER만 공유 가능
-    final showAdd = isOwnerLike || isEditor;
-    final showEdit = isOwnerLike || isEditor;
-    final showDelete = isOwnerLike;
-    final showMembers =
-        role == 'OWNER' ||
-        role == 'CO_OWNER'; // 명시적으로 OWNER와 CO_OWNER만 멤버 조회 가능
+
+    // 공유: OWNER와 CO_OWNER만 가능
+    final showShare = isOwner || isCoOwner;
+    // 사진 추가: OWNER, CO_OWNER, EDITOR 가능
+    final showAdd = isOwner || isCoOwner || isEditor;
+    // 앨범 수정: OWNER만 가능 (CO_OWNER, EDITOR 불가)
+    final showEdit = isOwner;
+    // 삭제: OWNER만 가능
+    final showDelete = isOwner;
+    // 멤버 조회: 모든 권한 가능
+    final showMembers = true;
     return Row(
       children: [
         IconButton(

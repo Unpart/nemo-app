@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/services/album_api.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/providers/album_provider.dart';
+import 'package:frontend/providers/user_provider.dart';
 
 class AlbumMembersScreen extends StatefulWidget {
   final int albumId;
@@ -162,6 +163,16 @@ class _AlbumMembersScreenState extends State<AlbumMembersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId = context.read<UserProvider>().userId;
+
+    // 현재 사용자의 역할 확인 (OWNER인지 체크)
+    final currentUserMember = _members.firstWhere(
+      (m) => currentUserId != null && (m['userId'] as int) == currentUserId,
+      orElse: () => <String, dynamic>{},
+    );
+    final currentUserRole = currentUserMember['role']?.toString() ?? 'VIEWER';
+    final isCurrentUserOwner = currentUserRole == 'OWNER';
+
     return Scaffold(
       appBar: AppBar(title: const Text('공유 멤버')),
       body: _loading
@@ -193,30 +204,36 @@ class _AlbumMembersScreenState extends State<AlbumMembersScreen> {
                     default:
                       roleKo = '보기 가능';
                   }
+
+                  // 권한 변경/강퇴 버튼: 현재 사용자가 OWNER일 때만 표시
+                  final showActions = isCurrentUserOwner;
+
                   return ListTile(
                     leading: const CircleAvatar(
                       child: Icon(Icons.person_outline),
                     ),
                     title: Text(nick),
                     subtitle: Text(roleKo),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          tooltip: '권한 변경',
-                          onPressed: () => _changeRole(userId),
-                          icon: const Icon(Icons.admin_panel_settings),
-                        ),
-                        IconButton(
-                          tooltip: '제거',
-                          onPressed: () => _remove(userId),
-                          icon: const Icon(
-                            Icons.remove_circle,
-                            color: Colors.redAccent,
-                          ),
-                        ),
-                      ],
-                    ),
+                    trailing: showActions
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: '권한 변경',
+                                onPressed: () => _changeRole(userId),
+                                icon: const Icon(Icons.admin_panel_settings),
+                              ),
+                              IconButton(
+                                tooltip: '제거',
+                                onPressed: () => _remove(userId),
+                                icon: const Icon(
+                                  Icons.remove_circle,
+                                  color: Colors.redAccent,
+                                ),
+                              ),
+                            ],
+                          )
+                        : null,
                   );
                 },
               ),
