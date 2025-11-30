@@ -262,9 +262,10 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                         friends = await FriendApi.getFriends();
                       } else {
                         final searchResults = await FriendApi.search(q);
+                        // 친구가 아닌 사용자는 확실히 제외
                         friends = searchResults.where((f) {
                           final isFriend = (f['isFriend'] as bool?) ?? false;
-                          return isFriend;
+                          return isFriend == true; // 명시적으로 true만 허용
                         }).toList();
                       }
                       // ignore: use_build_context_synchronously
@@ -283,6 +284,21 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                         final id = f['userId'] as int;
                         return !sharedUserIds.contains(id);
                       }).toList();
+
+                      if (availableFriends.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Center(
+                            child: Text(
+                              searchCtrl.text.trim().isEmpty
+                                  ? '공유할 친구가 없습니다.'
+                                  : '검색 결과가 없습니다.',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                        );
+                      }
+
                       return Column(
                         children: List.generate(availableFriends.length, (idx) {
                           final f = availableFriends[idx];
