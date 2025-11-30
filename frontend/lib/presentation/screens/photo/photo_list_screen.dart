@@ -1079,6 +1079,37 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
           _isLoading = false;
           _hasLoadedOnce = true;
         });
+
+        // AlbumProvider에 즐겨찾기 및 공유 상태 업데이트
+        final albumProvider = context.read<AlbumProvider>();
+        for (final m in content) {
+          final map = (m as Map).cast<String, dynamic>();
+          final albumId = map['albumId'] as int;
+
+          // 즐겨찾기 상태 업데이트
+          if (map.containsKey('favorited')) {
+            final favorited = map['favorited'] as bool? ?? false;
+            albumProvider.setFavorite(albumId, favorited);
+          }
+
+          // 공유 상태 확인: 실제로 공유된 앨범인지 확인
+          final role = (map['role'] as String?)?.toUpperCase();
+          if (role != null && role != 'OWNER') {
+            // 공유받은 앨범인 경우
+            albumProvider.setShared(albumId, true);
+          } else if (role == 'OWNER') {
+            // 오너인 경우, 공유 대상이 있는지 확인 (비동기)
+            AlbumApi.getShareTargets(albumId)
+                .then((targets) {
+                  if (targets.isNotEmpty && mounted) {
+                    albumProvider.setShared(albumId, true);
+                  }
+                })
+                .catchError((_) {
+                  // 에러 무시
+                });
+          }
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -1150,11 +1181,8 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
           final isFavorited =
               albumProvider.isFavorited(albumId) ||
               (a['favorited'] as bool?) == true;
-          // 공유 표시: 공유받은 앨범(role != OWNER) 또는 소유자가 공유한 앨범(isShared)
-          final role = (a['role'] as String?)?.toUpperCase();
-          final isShared =
-              (role != null && role != 'OWNER') ||
-              albumProvider.isShared(albumId);
+          // 공유 표시: 실제로 공유된 앨범인지 확인 (권한이 아닌 공유 여부로 판단)
+          final isShared = albumProvider.isShared(albumId);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

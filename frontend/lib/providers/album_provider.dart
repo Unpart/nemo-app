@@ -97,6 +97,15 @@ class AlbumProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setShared(int albumId, bool shared) {
+    if (shared) {
+      _sharedAlbumIds.add(albumId);
+    } else {
+      _sharedAlbumIds.remove(albumId);
+    }
+    notifyListeners();
+  }
+
   void addFromResponse(Map<String, dynamic> res) {
     final albumId = res['albumId'] as int;
 
@@ -366,6 +375,25 @@ class AlbumProvider extends ChangeNotifier {
             } else {
               _favoritedAlbumIds.remove(albumId);
             }
+          }
+
+          // 공유 상태 확인: 실제로 공유된 앨범인지 확인
+          final role = (map['role'] as String?)?.toUpperCase();
+          if (role != null && role != 'OWNER') {
+            // 공유받은 앨범인 경우
+            _sharedAlbumIds.add(albumId);
+          } else if (role == 'OWNER') {
+            // 오너인 경우, 공유 대상이 있는지 확인 (비동기)
+            AlbumApi.getShareTargets(albumId)
+                .then((targets) {
+                  if (targets.isNotEmpty) {
+                    _sharedAlbumIds.add(albumId);
+                    notifyListeners();
+                  }
+                })
+                .catchError((_) {
+                  // 에러 무시
+                });
           }
         }
         if (content.length < _size) {
