@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'package:frontend/services/album_api.dart';
@@ -74,7 +74,7 @@ class PhotoDownloadService {
         await file.writeAsBytes(res.bodyBytes);
 
         // 갤러리에 저장
-        final result = await ImageGallerySaver.saveFile(file.path);
+        final result = await ImageGallerySaverPlus.saveFile(file.path);
         if (result['isSuccess'] == true) {
           return true;
         } else {
@@ -150,7 +150,7 @@ class PhotoDownloadService {
               await file.writeAsBytes(downloadRes.bodyBytes);
 
               // 갤러리에 저장
-              final result = await ImageGallerySaver.saveFile(file.path);
+              final result = await ImageGallerySaverPlus.saveFile(file.path);
               if (result['isSuccess'] == true) {
                 successCount++;
               }
@@ -228,7 +228,7 @@ class PhotoDownloadService {
             await file.writeAsBytes(downloadRes.bodyBytes);
 
             // 갤러리에 저장
-            final result = await ImageGallerySaver.saveFile(file.path);
+            final result = await ImageGallerySaverPlus.saveFile(file.path);
             if (result['isSuccess'] == true) {
               successCount++;
             }

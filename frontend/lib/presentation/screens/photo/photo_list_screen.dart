@@ -90,6 +90,11 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
   @override
   Widget build(BuildContext context) {
     final items = context.watch<PhotoProvider>().items;
+
+    // build 메서드에서 addPostFrameCallback 제거
+    // 빌드 중에 setState()를 호출하면 위젯 트리 불일치 오류 발생
+    // 앨범 탭 전환은 _TopToggle의 onChanged에서 이미 처리됨
+
     return Scaffold(
       appBar: null,
       // 사진 선택 모드일 때는 갤러리 추가 FAB 숨기기
@@ -150,6 +155,7 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
                           child: _TopToggle(
                             isAlbums: _showAlbums,
                             onChanged: (isAlbums) {
+                              final wasAlbums = _showAlbums;
                               setState(() {
                                 _showAlbums = isAlbums;
                                 if (isAlbums) {
@@ -159,6 +165,16 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
                                   _photoDownloadWorking = false;
                                 }
                               });
+                              // setState() 콜백 외부에서 refresh() 호출 (다음 프레임에서 실행)
+                              if (isAlbums && !wasAlbums) {
+                                WidgetsBinding.instance.addPostFrameCallback((
+                                  _,
+                                ) {
+                                  if (mounted && _showAlbums) {
+                                    _albumListGridKey.currentState?.refresh();
+                                  }
+                                });
+                              }
                             },
                           ),
                         ),
@@ -196,8 +212,14 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
                                     );
                                     if (!mounted) return;
                                     if (created != null) {
-                                      // 앨범 생성 후 목록 새로고침
-                                      _albumListGridKey.currentState?.refresh();
+                                      // 앨범 생성 후 목록 새로고침 (다음 프레임에서 실행)
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                            if (mounted && _showAlbums) {
+                                              _albumListGridKey.currentState
+                                                  ?.refresh();
+                                            }
+                                          });
                                       ScaffoldMessenger.of(
                                         context,
                                       ).showSnackBar(
@@ -1136,16 +1158,10 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 화면이 다시 활성화될 때마다 앨범 목록 새로고침
-    // (공유 앨범 수락 후 돌아왔을 때 반영되도록)
-    // _albums.isNotEmpty 조건 제거: 앨범이 없어도 새로고침하여 공유 앨범을 가져올 수 있도록
-    if (_hasLoadedOnce && !_isLoading) {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        if (mounted) {
-          await _loadAlbums(reset: true);
-        }
-      });
-    }
+    // didChangeDependencies()에서 자동 새로고침 제거
+    // PhotoProvider 변경으로 인한 rebuild와 실제 화면 활성화를 구분할 수 없어서
+    // 불필요한 새로고침이 발생함
+    // 대신 RouteAware를 사용하거나 명시적으로 refresh() 호출
   }
 
   @override

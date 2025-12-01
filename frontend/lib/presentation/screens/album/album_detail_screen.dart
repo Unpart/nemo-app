@@ -36,10 +36,13 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   String? _myRole; // OWNER | CO_OWNER | EDITOR | VIEWER
   bool _roleLoading = false;
   bool _isLoadingDetail = false; // 무한 로딩 방지 플래그
+  Future<Map<String, dynamic>>? _albumDetailFuture; // Future를 변수에 저장하여 무한 요청 방지
 
   @override
   void initState() {
     super.initState();
+    // Future를 한 번만 생성하여 무한 요청 방지
+    _albumDetailFuture = AlbumApi.getAlbum(widget.albumId);
     // 첫 프레임 이후 자동 액션 실행 (모달/스낵바 등 UI 안전 호출)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _autoHandled) return;
@@ -58,6 +61,13 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       }
     });
     _loadMyRole();
+  }
+
+  // 앨범 상세 정보 새로고침 메서드
+  void _refreshAlbumDetail() {
+    setState(() {
+      _albumDetailFuture = AlbumApi.getAlbum(widget.albumId);
+    });
   }
 
   Future<void> _loadMyRole() async {
@@ -127,6 +137,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       await AlbumApi.addPhotos(albumId: widget.albumId, photoIds: selected);
       if (!mounted) return;
       context.read<AlbumProvider>().addPhotos(widget.albumId, selected);
+      // 앨범 상세 정보 새로고침
+      _refreshAlbumDetail();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('사진이 추가되었습니다.')));
@@ -147,6 +159,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
       await AlbumApi.removePhotos(albumId: widget.albumId, photoIds: photoIds);
       if (!mounted) return;
       context.read<AlbumProvider>().removePhotos(widget.albumId, photoIds);
+      // 앨범 상세 정보 새로고침
+      _refreshAlbumDetail();
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('사진이 삭제되었습니다.')));
@@ -542,7 +556,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
           ),
           // 태그 요약 영역 (모킹 기준)
           FutureBuilder<Map<String, dynamic>>(
-            future: AlbumApi.getAlbum(widget.albumId),
+            future: _albumDetailFuture,
             builder: (context, snap) {
               if (!snap.hasData) return const SizedBox.shrink();
               final data = snap.data!;
@@ -570,7 +584,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
             child: shouldFetchDetail
                 ? const Center(child: CircularProgressIndicator())
                 : FutureBuilder<Map<String, dynamic>>(
-                    future: AlbumApi.getAlbum(widget.albumId),
+                    future: _albumDetailFuture,
                     builder: (context, snapshot) {
                       if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
@@ -682,6 +696,11 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
           if (!_isSelectionMode || selectedSet.isEmpty) {
             return const SizedBox.shrink();
           }
+          // 사진 삭제 권한: OWNER, CO_OWNER, EDITOR만 가능
+          final role = _myRole ?? 'VIEWER';
+          final canDeletePhotos =
+              role == 'OWNER' || role == 'CO_OWNER' || role == 'EDITOR';
+
           return SafeArea(
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -736,28 +755,30 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
+                  if (canDeletePhotos) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent,
+                        ),
+                        onPressed: _working
+                            ? null
+                            : () async {
+                                // 선택된 사진 삭제
+                                final toRemove = selectedSet.toList();
+                                await _removeSelected(toRemove);
+                                setState(() {
+                                  _selected.clear();
+                                  _isSelectionMode = false;
+                                  _selectedNotifier.value = <int>{};
+                                });
+                              },
+                        icon: const Icon(Icons.delete_outline),
+                        label: Text('선택 삭제 (${selectedSet.length})'),
                       ),
-                      onPressed: _working
-                          ? null
-                          : () async {
-                              // 선택된 사진 삭제
-                              final toRemove = selectedSet.toList();
-                              await _removeSelected(toRemove);
-                              setState(() {
-                                _selected.clear();
-                                _isSelectionMode = false;
-                                _selectedNotifier.value = <int>{};
-                              });
-                            },
-                      icon: const Icon(Icons.delete_outline),
-                      label: Text('선택 삭제 (${selectedSet.length})'),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

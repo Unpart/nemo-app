@@ -102,8 +102,8 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
   bool get _canEdit {
     // 앨범에서 진입하지 않은 경우 (일반 사진 목록에서 진입) 편집 가능
     if (widget.albumId == null) return true;
-    // 앨범에서 진입한 경우 role이 OWNER인지 확인
-    return _myRole == 'OWNER';
+    // 앨범에서 진입한 경우: OWNER, CO_OWNER, EDITOR는 사진 삭제 가능
+    return _myRole == 'OWNER' || _myRole == 'CO_OWNER' || _myRole == 'EDITOR';
   }
 
   @override
