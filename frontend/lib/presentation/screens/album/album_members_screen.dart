@@ -198,6 +198,8 @@ class _AlbumMembersScreenState extends State<AlbumMembersScreen> {
                   final userId = m['userId'] as int;
                   final nick = m['nickname']?.toString() ?? 'user$userId';
                   final role = m['role']?.toString() ?? 'VIEWER';
+                  final avatarUrl = (m['profileImageUrl'] as String?)
+                      ?.trim(); // 백엔드 필드명에 맞춤
                   String roleKo;
                   switch (role) {
                     case 'OWNER':
@@ -225,8 +227,13 @@ class _AlbumMembersScreenState extends State<AlbumMembersScreen> {
                   final showActions = canManageMembers && targetIsEditable;
 
                   return ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.person_outline),
+                    leading: CircleAvatar(
+                      backgroundImage: avatarUrl != null && avatarUrl.isNotEmpty
+                          ? NetworkImage(avatarUrl)
+                          : null,
+                      child: (avatarUrl == null || avatarUrl.isEmpty)
+                          ? const Icon(Icons.person_outline)
+                          : null,
                     ),
                     title: Text(nick),
                     subtitle: Text(roleKo),

@@ -1197,14 +1197,17 @@ class _ShareBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // 테두리용 검은색 공유 아이콘 (약간 크게)
-        Icon(Icons.share, color: Colors.black.withOpacity(0.5), size: 20),
-        // 앞에 배치할 흰색 공유 아이콘
-        const Icon(Icons.share, color: Colors.white, size: 18),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.45),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white.withOpacity(0.9), // 더 선명한 흰색 테두리
+          width: 1.4,
+        ),
+      ),
+      child: const Icon(Icons.share, size: 14, color: Colors.white),
     );
   }
 }
@@ -1403,22 +1406,10 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
             albumProvider.setFavorite(albumId, favorited);
           }
 
-          // 공유 상태 확인: 실제로 공유된 앨범인지 확인
-          final role = (map['role'] as String?)?.toUpperCase();
-          if (role != null && role != 'OWNER') {
-            // 공유받은 앨범인 경우
-            albumProvider.setShared(albumId, true);
-          } else if (role == 'OWNER') {
-            // 오너인 경우, 공유 대상이 있는지 확인 (비동기)
-            AlbumApi.getShareTargets(albumId)
-                .then((targets) {
-                  if (targets.isNotEmpty && mounted) {
-                    albumProvider.setShared(albumId, true);
-                  }
-                })
-                .catchError((_) {
-                  // 에러 무시
-                });
+          // 공유 상태: 백엔드에서 내려주는 shared 플래그를 그대로 사용
+          if (map.containsKey('shared')) {
+            final shared = map['shared'] as bool? ?? false;
+            albumProvider.setShared(albumId, shared);
           }
         }
       }
