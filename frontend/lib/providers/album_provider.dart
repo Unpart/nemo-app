@@ -309,6 +309,15 @@ class AlbumProvider extends ChangeNotifier {
         createdAt: (res['createdAt'] as String?) ?? '',
         photoIdList: photoIdList,
       );
+      // 상세 응답의 shared 플래그를 기반으로 공유 상태 갱신
+      final sharedFlag = res['shared'] as bool?;
+      if (sharedFlag != null) {
+        if (sharedFlag) {
+          _sharedAlbumIds.add(albumId);
+        } else {
+          _sharedAlbumIds.remove(albumId);
+        }
+      }
       if (idx == -1) {
         _albums.add(item);
       } else {
@@ -391,22 +400,33 @@ class AlbumProvider extends ChangeNotifier {
           }
 
           // 공유 상태 확인: 실제로 공유된 앨범인지 확인
-          final role = (map['role'] as String?)?.toUpperCase();
-          if (role != null && role != 'OWNER') {
-            // 공유받은 앨범인 경우
-            _sharedAlbumIds.add(albumId);
-          } else if (role == 'OWNER') {
-            // 오너인 경우, 공유 대상이 있는지 확인 (비동기)
-            AlbumApi.getShareTargets(albumId)
-                .then((targets) {
-                  if (targets.isNotEmpty) {
-                    _sharedAlbumIds.add(albumId);
-                    notifyListeners();
-                  }
-                })
-                .catchError((_) {
-                  // 에러 무시
-                });
+          // 우선 백엔드에서 내려주는 shared 플래그를 신뢰
+          if (map.containsKey('shared')) {
+            final shared = map['shared'] as bool? ?? false;
+            if (shared) {
+              _sharedAlbumIds.add(albumId);
+            } else {
+              _sharedAlbumIds.remove(albumId);
+            }
+          } else {
+            // shared 플래그가 없는 구버전 응답 대비: role/공유 대상 조회로 보조 판별
+            final role = (map['role'] as String?)?.toUpperCase();
+            if (role != null && role != 'OWNER') {
+              // 공유받은 앨범인 경우
+              _sharedAlbumIds.add(albumId);
+            } else if (role == 'OWNER') {
+              // 오너인 경우, 공유 대상이 있는지 확인 (비동기)
+              AlbumApi.getShareTargets(albumId)
+                  .then((targets) {
+                    if (targets.isNotEmpty) {
+                      _sharedAlbumIds.add(albumId);
+                      notifyListeners();
+                    }
+                  })
+                  .catchError((_) {
+                    // 에러 무시
+                  });
+            }
           }
         }
         if (content.length < _size) {

@@ -840,6 +840,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   }
 
   Widget _buildActionsMenu(BuildContext context) {
+    final albumProvider = context.read<AlbumProvider>();
+    final isAlbumShared = albumProvider.isShared(widget.albumId);
     // 역할별 허용 액션 계산
     final role = _myRole ?? 'VIEWER';
     final isOwner = role == 'OWNER';
@@ -854,8 +856,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     final showEdit = isOwner;
     // 삭제: OWNER만 가능
     final showDelete = isOwner;
-    // 멤버 조회: 모든 권한 가능
-    final showMembers = true;
+    // 멤버 조회: 실제로 공유된 앨범에서만 노출 (shared == true)
+    final showMembers = isAlbumShared;
     return Row(
       children: [
         IconButton(
