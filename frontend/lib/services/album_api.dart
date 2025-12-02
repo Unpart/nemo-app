@@ -128,10 +128,10 @@ class AlbumApi {
     final uri = _uri('/api/albums');
     final headers = _headersJson();
     final body = jsonEncode({
-        'title': title,
-        if (description != null) 'description': description,
-        if (coverPhotoId != null) 'coverPhotoId': coverPhotoId,
-        if (photoIdList != null) 'photoIdList': photoIdList,
+      'title': title,
+      if (description != null) 'description': description,
+      if (coverPhotoId != null) 'coverPhotoId': coverPhotoId,
+      if (photoIdList != null) 'photoIdList': photoIdList,
     });
 
     print('📁 [AlbumApi] createAlbum 요청 URL: $uri');
@@ -846,32 +846,6 @@ class AlbumApi {
     if (res.statusCode == 403) throw Exception('FORBIDDEN');
     if (res.statusCode == 404) throw Exception('ALBUM_NOT_FOUND');
     throw Exception('Failed to create share link (${res.statusCode})');
-  }
-
-  // GET /api/albums/{albumId}/share/targets
-  static Future<List<Map<String, dynamic>>> getShareTargets(int albumId) async {
-    if (AppConstants.useMockApi) {
-      await Future.delayed(
-        Duration(milliseconds: AppConstants.simulatedNetworkDelayMs),
-      );
-      // 더미: 2명 공유 중
-      return [
-        {'userId': 3, 'nickname': '네컷러버'},
-        {'userId': 5, 'nickname': '사진장인'},
-      ];
-    }
-    final res = await http.get(
-      _uri('/api/albums/$albumId/share/targets'),
-      headers: _headersJson(),
-    );
-    if (res.statusCode == 200) {
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      final List list = body['sharedTo'] ?? [];
-      return list.cast<Map<String, dynamic>>();
-    }
-    if (res.statusCode == 403) throw Exception('FORBIDDEN');
-    if (res.statusCode == 404) throw Exception('ALBUM_NOT_FOUND');
-    throw Exception('Failed to fetch share targets (${res.statusCode})');
   }
 
   // DELETE /api/albums/{albumId}/share/{userId}

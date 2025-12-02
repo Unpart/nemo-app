@@ -1180,14 +1180,17 @@ class _FavoriteBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        // 테두리용 검은색 하트 (약간 크게)
-        Icon(Icons.favorite, color: Colors.black.withOpacity(0.5), size: 20),
-        // 앞에 배치할 흰색 하트
-        const Icon(Icons.favorite, color: Colors.white, size: 18),
-      ],
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.45),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: Colors.white.withOpacity(0.9), // 더 선명한 흰색 테두리
+          width: 1.4,
+        ),
+      ),
+      child: const Icon(Icons.favorite, size: 14, color: Colors.white),
     );
   }
 }
@@ -1736,11 +1739,7 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
                                 const Positioned(
                                   right: 6,
                                   top: 6,
-                                  child: Icon(
-                                    Icons.favorite,
-                                    size: 20,
-                                    color: Colors.white,
-                                  ),
+                                  child: _FavoriteBadge(),
                                 ),
                               // 공유 표시 - AlbumProvider 상태 사용 (소유자가 공유한 앨범도 포함)
                               if (isShared)
@@ -1804,7 +1803,8 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
     List<Map<String, dynamic>> friends = await FriendApi.getFriends();
     List<Map<String, dynamic>> shareTargets = [];
     try {
-      shareTargets = await AlbumApi.getShareTargets(albumId);
+      // 이미 공유된 멤버 목록은 share/members API로 가져옴
+      shareTargets = await AlbumApi.getShareMembers(albumId);
     } catch (_) {}
     await showModalBottomSheet(
       context: context,
