@@ -8,7 +8,14 @@ import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/api_client.dart';
 
 class AlbumApi {
-  static Uri _uri(String path) => Uri.parse('${AuthService.baseUrl}$path');
+  static Uri _uri(String path) {
+    // baseUrl 끝의 슬래시와 path 시작의 슬래시 처리
+    final base = AuthService.baseUrl.endsWith('/')
+        ? AuthService.baseUrl.substring(0, AuthService.baseUrl.length - 1)
+        : AuthService.baseUrl;
+    final cleanPath = path.startsWith('/') ? path : '/$path';
+    return Uri.parse('$base$cleanPath');
+  }
 
   static Map<String, String> _headersJson() {
     final token = AuthService.accessToken;
@@ -337,14 +344,37 @@ class AlbumApi {
         ],
       };
     }
-    final res = await http.get(
-      _uri('/api/albums/$albumId'),
-      headers: _headersJson(),
-    );
+    final uri = _uri('/api/albums/$albumId');
+    print('📁 [AlbumApi] getAlbum 요청 URL: $uri');
+    print('📁 [AlbumApi] 헤더: ${_headersJson()}');
+
+    final res = await http.get(uri, headers: _headersJson());
+
+    print('📁 [AlbumApi] 응답 상태: ${res.statusCode}');
+    print('📁 [AlbumApi] 응답 본문: ${res.body}');
+
     if (res.statusCode == 200) {
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
-    throw Exception('Failed to fetch album (${res.statusCode})');
+    if (res.statusCode == 401) {
+      final errorBody = res.body.isNotEmpty ? jsonDecode(res.body) : {};
+      final message = errorBody['message'] as String?;
+      throw Exception(message ?? '인증이 필요합니다. (401)');
+    }
+    if (res.statusCode == 400) {
+      // 400 에러의 경우 상세 메시지 확인
+      final errorBody = res.body.isNotEmpty ? jsonDecode(res.body) : {};
+      final message = errorBody['message'] as String?;
+      final error = errorBody['error'] as String?;
+      print(
+        '🔴 [AlbumApi] 400 에러 상세: message=$message, error=$error, body=$errorBody',
+      );
+      throw Exception(message ?? error ?? '잘못된 요청입니다. (400)');
+    }
+    if (res.statusCode == 404) {
+      throw Exception('앨범을 찾을 수 없습니다. (404)');
+    }
+    throw Exception('앨범 조회 실패 (${res.statusCode})');
   }
 
   // GET /api/albums/share/requests -> PENDING 공유 요청 목록

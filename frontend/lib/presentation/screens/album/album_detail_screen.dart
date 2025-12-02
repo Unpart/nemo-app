@@ -586,6 +586,41 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                 : FutureBuilder<Map<String, dynamic>>(
                     future: _albumDetailFuture,
                     builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      
+                      if (snapshot.hasError) {
+                        final error = snapshot.error;
+                        print('❌ [AlbumDetailScreen] 에러: $error');
+                        return Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                              const SizedBox(height: 16),
+                              Text(
+                                '앨범을 불러오지 못했습니다',
+                                style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                error.toString().replaceAll('Exception: ', ''),
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: () {
+                                  _refreshAlbumDetail();
+                                },
+                                child: const Text('다시 시도'),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
                       if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }

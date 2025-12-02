@@ -5,20 +5,23 @@ import 'auth_service.dart';
 class ApiClient {
   static Uri uri(String path, [Map<String, String>? query]) {
     // baseUrl 끝의 슬래시와 path 시작의 슬래시 처리
-    final base = AuthService.baseUrl.endsWith('/') 
+    final base = AuthService.baseUrl.endsWith('/')
         ? AuthService.baseUrl.substring(0, AuthService.baseUrl.length - 1)
         : AuthService.baseUrl;
     final cleanPath = path.startsWith('/') ? path : '/$path';
     final fullUrl = '$base$cleanPath';
-    
+
     print('🔗 [ApiClient] baseUrl: ${AuthService.baseUrl}');
     print('🔗 [ApiClient] path: $path');
     print('🔗 [ApiClient] 최종 URL: $fullUrl');
-    
+
     return Uri.parse(fullUrl).replace(queryParameters: query);
   }
 
-  static Map<String, String> headers({bool includeAuth = true, bool json = true}) {
+  static Map<String, String> headers({
+    bool includeAuth = true,
+    bool json = true,
+  }) {
     final h = <String, String>{};
     if (json) h['Content-Type'] = 'application/json';
     if (includeAuth && AuthService.accessToken != null) {
@@ -47,7 +50,7 @@ class ApiClient {
     print('🌐 [ApiClient] POST 요청 URL: $url');
     print('🌐 [ApiClient] Headers: ${headers(includeAuth: includeAuth)}');
     print('🌐 [ApiClient] Body: ${body != null ? jsonEncode(body) : null}');
-    
+
     try {
       final response = await http.post(
         url,
@@ -75,4 +78,3 @@ class ApiClient {
     );
   }
 }
-
