@@ -37,6 +37,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   );
   String? _myRole; // OWNER | CO_OWNER | EDITOR | VIEWER
   bool _roleLoading = false;
+  bool _isSharedAlbum = false; // GET /api/albums/{id}의 shared 플래그
   bool _isLoadingDetail = false; // 무한 로딩 방지 플래그
   Future<Map<String, dynamic>>? _albumDetailFuture; // Future를 변수에 저장하여 무한 요청 방지
   bool _initialLoadTried = false; // 앨범 상세 최초 로딩 시도 여부
@@ -642,6 +643,17 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                       }
 
                       final data = snapshot.data!;
+                      // 상세 응답의 shared 플래그를 지역 상태에 반영하여 AppBar 액션에 사용
+                      final sharedFlag = data['shared'] as bool? ?? false;
+                      if (sharedFlag != _isSharedAlbum) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) {
+                            setState(() {
+                              _isSharedAlbum = sharedFlag;
+                            });
+                          }
+                        });
+                      }
                       final List photoListData =
                           (data['photoList'] as List? ?? []);
 
@@ -841,7 +853,9 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
 
   Widget _buildActionsMenu(BuildContext context) {
     final albumProvider = context.read<AlbumProvider>();
-    final isAlbumShared = albumProvider.isShared(widget.albumId);
+    // Provider 상태와 상세 응답 플래그를 모두 고려 (둘 중 하나라도 true면 공유 앨범으로 간주)
+    final isAlbumShared =
+        _isSharedAlbum || albumProvider.isShared(widget.albumId);
     // 역할별 허용 액션 계산
     final role = _myRole ?? 'VIEWER';
     final isOwner = role == 'OWNER';
