@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:google_fonts/google_fonts.dart'; // ✅ 폰트 적용을 위해 import
 import 'package:flutter_naver_map/flutter_naver_map.dart'; // ✅ 네이버맵 패키지 import
+import 'services/auth_service.dart';
 import 'app/theme/app_colors.dart'; // ✅ 색상 테마 적용을 위해 import
 import 'presentation/screens/login/login_screen.dart';
 import 'providers/provider.dart';
@@ -11,6 +12,9 @@ import 'providers/provider.dart';
 void main() async {
   // 플러그인 초기화를 보장 (camera 등)
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ 서버 baseUrl 자동 결정 (원격 서버 health 체크 → 실패 시 로컬로 fallback)
+  await AuthService.initBaseUrl();
 
   // ✅ 네이버맵 초기화 (NaverMap 위젯 사용 전 필수!)
   await FlutterNaverMap().init(

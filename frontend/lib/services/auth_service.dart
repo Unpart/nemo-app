@@ -7,9 +7,44 @@ import '../app/constants.dart';
 import 'api_client.dart';
 
 class AuthService {
-  // ✅ 서버 URL 설정 (로컬 or 배포 서버로 교체해야 함)
-  static final String baseUrl =
-      'https://port-0-nemo-docker-springboot-prod-mdy7o3aya1eb5a01.sel5.cloudtype.app/'; // ← TODO: 실제 주소로 바꿔!
+  // ✅ 서버 URL 설정 (health 체크 기반 원격/로컬 자동 선택)
+  static String? _resolvedBaseUrl;
+
+  // 원격/로컬 후보 URL
+  static const String _remoteBaseUrl =
+      'https://port-0-nemo-docker-springboot-prod-mdy7o3aya1eb5a01.sel5.cloudtype.app/';
+  static const String _localBaseUrlAndroid = 'http://10.0.2.2:8080/';
+  static const String _localBaseUrlDefault = 'http://localhost:8080/';
+
+  // 외부에서 사용하는 baseUrl (초기화 전에는 원격 기본값 사용)
+  static String get baseUrl => _resolvedBaseUrl ?? _remoteBaseUrl;
+
+  /// 앱 시작 시 한 번 호출해서 baseUrl을 결정
+  static Future<void> initBaseUrl() async {
+    if (_resolvedBaseUrl != null) return; // 이미 결정된 경우 재실행 방지
+
+    // 1) 원격 서버 health 체크 시도
+    try {
+      final uri = Uri.parse('${_remoteBaseUrl}actuator/health');
+      final res = await http.get(uri).timeout(const Duration(seconds: 2));
+
+      if (res.statusCode >= 200 && res.statusCode < 400) {
+        _resolvedBaseUrl = _remoteBaseUrl;
+        print('🌐 [AuthService] 원격 서버 사용: $_resolvedBaseUrl');
+        return;
+      }
+    } catch (e) {
+      print('🌐 [AuthService] 원격 서버 health 체크 실패: $e');
+    }
+
+    // 2) 실패 시 로컬 서버로 fallback
+    if (Platform.isAndroid) {
+      _resolvedBaseUrl = _localBaseUrlAndroid;
+    } else {
+      _resolvedBaseUrl = _localBaseUrlDefault;
+    }
+    print('🌐 [AuthService] 로컬 서버 사용: $_resolvedBaseUrl');
+  }
 
   // JWT 토큰 저장소
   static String? _accessToken;
@@ -114,16 +149,33 @@ class AuthService {
           'profileImageUrl': user?['profileImageUrl'],
         };
       } else if (response.statusCode == 401) {
-        // 백엔드 응답의 실제 메시지 확인
-        final data = response.body.isNotEmpty ? jsonDecode(response.body) : {};
-        final message = data['message'] as String?;
+        // 백엔드 명세: { "error": "INVALID_CREDENTIALS", "message": "이메일 또는 비밀번호가 올바르지 않습니다." }
+        final raw = response.body.isNotEmpty
+            ? utf8.decode(response.bodyBytes)
+            : '';
+        Map<String, dynamic>? data;
+        try {
+          data = raw.isNotEmpty
+              ? jsonDecode(raw) as Map<String, dynamic>
+              : null;
+        } catch (_) {
+          data = null;
+        }
+        final error = data?['error'] as String?;
+        final message = data?['message'] as String?;
 
-        // 백엔드가 구체적인 메시지를 제공하면 그대로 사용
+        if (error == 'INVALID_CREDENTIALS') {
+          // 잘못된 이메일/비밀번호일 때는 명세서 메시지를 정확히 노출
+          throw Exception(
+            message?.isNotEmpty == true ? message : '이메일 또는 비밀번호가 올바르지 않습니다.',
+          );
+        }
+
+        // 기타 401 오류는 백엔드 메시지 우선, 없으면 일반 메시지
         if (message != null && message.isNotEmpty) {
           throw Exception(message);
         }
-        // 기본값: 비밀번호 오류로 처리 (하지만 백엔드 메시지 우선)
-        throw Exception('비밀번호가 틀렸습니다');
+        throw Exception('인증에 실패했습니다. 다시 로그인해주세요.');
       } else if (response.statusCode == 400) {
         final data = jsonDecode(response.body);
         throw Exception(data['message'] ?? '잘못된 요청입니다.');
