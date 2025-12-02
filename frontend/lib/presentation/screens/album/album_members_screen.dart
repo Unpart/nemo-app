@@ -59,13 +59,15 @@ class _AlbumMembersScreenState extends State<AlbumMembersScreen> {
     }
   }
 
-  Future<void> _changeRole(int userId, String currentUserRole, String targetRole) async {
+  Future<void> _changeRole(
+    int userId,
+    String currentUserRole,
+    String targetRole,
+  ) async {
     final role = await showModalBottomSheet<String>(
       context: context,
-      builder: (_) => _RoleSheet(
-        currentUserRole: currentUserRole,
-        targetRole: targetRole,
-      ),
+      builder: (_) =>
+          _RoleSheet(currentUserRole: currentUserRole, targetRole: targetRole),
     );
     if (role == null) return;
     try {
@@ -216,7 +218,9 @@ class _AlbumMembersScreenState extends State<AlbumMembersScreen> {
                   // 2. OWNER인 경우: CO_OWNER, EDITOR, VIEWER 모두 변경/강퇴 가능
                   // 3. CO_OWNER인 경우: EDITOR, VIEWER만 변경/강퇴 가능
                   final targetIsEditable = isCurrentUserOwner
-                      ? (role == 'CO_OWNER' || role == 'EDITOR' || role == 'VIEWER')
+                      ? (role == 'CO_OWNER' ||
+                            role == 'EDITOR' ||
+                            role == 'VIEWER')
                       : (role == 'EDITOR' || role == 'VIEWER');
                   final showActions = canManageMembers && targetIsEditable;
 
@@ -260,12 +264,13 @@ class _RoleSheet extends StatelessWidget {
   final String targetRole; // 변경 대상의 현재 역할
   final List<String> roles;
 
-  _RoleSheet({
-    required this.currentUserRole,
-    required this.targetRole,
-  }) : roles = _getAvailableRoles(currentUserRole, targetRole);
+  _RoleSheet({required this.currentUserRole, required this.targetRole})
+    : roles = _getAvailableRoles(currentUserRole, targetRole);
 
-  static List<String> _getAvailableRoles(String currentUserRole, String targetRole) {
+  static List<String> _getAvailableRoles(
+    String currentUserRole,
+    String targetRole,
+  ) {
     if (currentUserRole == 'OWNER') {
       if (targetRole == 'CO_OWNER') {
         // OWNER가 CO_OWNER를 변경할 때: EDITOR, VIEWER만 가능
