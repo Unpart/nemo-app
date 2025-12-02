@@ -315,430 +315,423 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
                 child: Stack(
                   children: [
                     // 사진 탭일 때만 items.isEmpty 체크, 앨범 탭일 때는 항상 앨범 목록 표시
-                    (!_showAlbums && items.isEmpty)
-                        ? const _EmptyState()
-                        : (_showAlbums
-                              ? _AlbumListGrid(
-                                  key: _albumListGridKey,
-                                  sort: _albumSort,
-                                  sharedOnly: _albumSharedOnly,
-                                )
-                              : NotificationListener<ScrollNotification>(
-                                  onNotification: (n) {
-                                    if (n.metrics.pixels >=
-                                        n.metrics.maxScrollExtent - 200) {
-                                      final p = context.read<PhotoProvider>();
-                                      if (!p.isLoading && p.hasMore) {
-                                        p.loadNextPage();
-                                      }
-                                    }
-                                    return false;
-                                  },
-                                  child: Consumer<PhotoProvider>(
-                                    builder: (_, p, __) => Stack(
-                                      children: [
-                                        GridView.builder(
-                                          gridDelegate:
-                                              const SliverGridDelegateWithFixedCrossAxisCount(
-                                                crossAxisCount: 2,
-                                                mainAxisSpacing: 20,
-                                                crossAxisSpacing: 20,
-                                                childAspectRatio: 0.72,
-                                              ),
-                                          itemCount: items.length,
-                                          itemBuilder: (_, i) {
-                                            final item = items[i];
-                                            return _PhotoCard(
-                                              item: item,
-                                              isSelectionMode:
-                                                  _photoSelectionMode,
-                                              isSelected: _selectedPhotoIds
-                                                  .contains(item.photoId),
-                                              onTap: () {
-                                                if (_photoSelectionMode) {
-                                                  setState(() {
-                                                    if (_selectedPhotoIds
-                                                        .contains(
-                                                          item.photoId,
-                                                        )) {
-                                                      _selectedPhotoIds.remove(
-                                                        item.photoId,
-                                                      );
-                                                      if (_selectedPhotoIds
-                                                          .isEmpty) {
-                                                        _photoSelectionMode =
-                                                            false;
-                                                      }
-                                                    } else {
-                                                      _selectedPhotoIds.add(
-                                                        item.photoId,
-                                                      );
-                                                    }
-                                                  });
-                                                } else {
-                                                  Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                      builder: (_) =>
-                                                          PhotoViewerScreen(
-                                                            photoId:
-                                                                item.photoId,
-                                                            imageUrl:
-                                                                item.imageUrl,
-                                                          ),
-                                                    ),
-                                                  );
-                                                }
-                                              },
-                                              onLongPress: () {
-                                                setState(() {
-                                                  _photoSelectionMode = true;
-                                                  _selectedPhotoIds.add(
-                                                    item.photoId,
-                                                  );
-                                                });
-                                              },
-                                            );
-                                          },
-                                        ),
-                                        if (p.isLoading)
-                                          const Positioned(
-                                            left: 0,
-                                            right: 0,
-                                            bottom: 0,
-                                            child: Padding(
-                                              padding: EdgeInsets.all(8),
-                                              child: Center(
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
+                    if (!_showAlbums && items.isEmpty)
+                      const _EmptyState()
+                    else if (_showAlbums)
+                      _AlbumListGrid(
+                        key: _albumListGridKey,
+                        sort: _albumSort,
+                        sharedOnly: _albumSharedOnly,
+                      )
+                    else
+                      RefreshIndicator(
+                        onRefresh: () async {
+                          await context.read<PhotoProvider>().resetAndLoad(
+                            sort: _sort,
+                          );
+                        },
+                        child: NotificationListener<ScrollNotification>(
+                          onNotification: (n) {
+                            if (n.metrics.pixels >=
+                                n.metrics.maxScrollExtent - 200) {
+                              final p = context.read<PhotoProvider>();
+                              if (!p.isLoading && p.hasMore) {
+                                p.loadNextPage();
+                              }
+                            }
+                            return false;
+                          },
+                          child: Consumer<PhotoProvider>(
+                            builder: (_, p, __) => Stack(
+                              children: [
+                                GridView.builder(
+                                  gridDelegate:
+                                      const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 2,
+                                        mainAxisSpacing: 20,
+                                        crossAxisSpacing: 20,
+                                        childAspectRatio: 0.72,
+                                      ),
+                                  itemCount: items.length,
+                                  itemBuilder: (_, i) {
+                                    final item = items[i];
+                                    return _PhotoCard(
+                                      item: item,
+                                      isSelectionMode: _photoSelectionMode,
+                                      isSelected: _selectedPhotoIds.contains(
+                                        item.photoId,
+                                      ),
+                                      onTap: () {
+                                        if (_photoSelectionMode) {
+                                          setState(() {
+                                            if (_selectedPhotoIds.contains(
+                                              item.photoId,
+                                            )) {
+                                              _selectedPhotoIds.remove(
+                                                item.photoId,
+                                              );
+                                              if (_selectedPhotoIds.isEmpty) {
+                                                _photoSelectionMode = false;
+                                              }
+                                            } else {
+                                              _selectedPhotoIds.add(
+                                                item.photoId,
+                                              );
+                                            }
+                                          });
+                                        } else {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => PhotoViewerScreen(
+                                                photoId: item.photoId,
+                                                imageUrl: item.imageUrl,
                                               ),
                                             ),
-                                          ),
-                                        if (_photoSelectionMode &&
-                                            _selectedPhotoIds.isNotEmpty)
-                                          Positioned(
-                                            left: 0,
-                                            right: 0,
-                                            bottom: 0,
-                                            child: SafeArea(
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(
-                                                  12,
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    TextButton(
-                                                      onPressed:
-                                                          _photoDownloadWorking
-                                                          ? null
-                                                          : () {
-                                                              setState(() {
-                                                                _photoSelectionMode =
-                                                                    false;
+                                          );
+                                        }
+                                      },
+                                      onLongPress: () {
+                                        setState(() {
+                                          _photoSelectionMode = true;
+                                          _selectedPhotoIds.add(item.photoId);
+                                        });
+                                      },
+                                    );
+                                  },
+                                ),
+                                if (p.isLoading)
+                                  const Positioned(
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    child: Padding(
+                                      padding: EdgeInsets.all(8),
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (_photoSelectionMode &&
+                                    _selectedPhotoIds.isNotEmpty)
+                                  Positioned(
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    child: SafeArea(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(12),
+                                        child: Row(
+                                          children: [
+                                            TextButton(
+                                              onPressed: _photoDownloadWorking
+                                                  ? null
+                                                  : () {
+                                                      setState(() {
+                                                        _photoSelectionMode =
+                                                            false;
+                                                        _selectedPhotoIds
+                                                            .clear();
+                                                      });
+                                                    },
+                                              style: TextButton.styleFrom(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8,
+                                                    ),
+                                              ),
+                                              child: const Text(
+                                                '취소',
+                                                style: TextStyle(fontSize: 13),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: ElevatedButton.icon(
+                                                onPressed: _photoDownloadWorking
+                                                    ? null
+                                                    : () async {
+                                                        setState(() {
+                                                          _photoDownloadWorking =
+                                                              true;
+                                                        });
+                                                        try {
+                                                          final count =
+                                                              await PhotoDownloadService.downloadPhotosToGallery(
                                                                 _selectedPhotoIds
-                                                                    .clear();
-                                                              });
-                                                            },
-                                                      style: TextButton.styleFrom(
-                                                        padding:
-                                                            const EdgeInsets.symmetric(
-                                                              horizontal: 12,
-                                                              vertical: 8,
+                                                                    .toList(),
+                                                              );
+                                                          if (!mounted) {
+                                                            return;
+                                                          }
+                                                          ScaffoldMessenger.of(
+                                                            context,
+                                                          ).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text(
+                                                                count > 0
+                                                                    ? '$count개의 사진을 갤러리에 저장했어요.'
+                                                                    : '다운로드 가능한 사진이 없습니다.',
+                                                              ),
                                                             ),
-                                                      ),
-                                                      child: const Text(
-                                                        '취소',
-                                                        style: TextStyle(
-                                                          fontSize: 13,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Expanded(
-                                                      child: ElevatedButton.icon(
-                                                        onPressed:
-                                                            _photoDownloadWorking
-                                                            ? null
-                                                            : () async {
-                                                                setState(() {
-                                                                  _photoDownloadWorking =
-                                                                      true;
-                                                                });
-                                                                try {
-                                                                  final count =
-                                                                      await PhotoDownloadService.downloadPhotosToGallery(
-                                                                        _selectedPhotoIds
-                                                                            .toList(),
-                                                                      );
-                                                                  if (!mounted) {
-                                                                    return;
-                                                                  }
-                                                                  ScaffoldMessenger.of(
-                                                                    context,
-                                                                  ).showSnackBar(
-                                                                    SnackBar(
-                                                                      content: Text(
-                                                                        count > 0
-                                                                            ? '$count개의 사진을 갤러리에 저장했어요.'
-                                                                            : '다운로드 가능한 사진이 없습니다.',
-                                                                      ),
+                                                          );
+                                                          setState(() {
+                                                            _photoSelectionMode =
+                                                                false;
+                                                            _selectedPhotoIds
+                                                                .clear();
+                                                          });
+                                                        } catch (e) {
+                                                          if (!mounted) {
+                                                            return;
+                                                          }
+                                                          ScaffoldMessenger.of(
+                                                            context,
+                                                          ).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text(
+                                                                '다운로드 중 오류: $e',
+                                                              ),
+                                                            ),
+                                                          );
+                                                        } finally {
+                                                          if (mounted) {
+                                                            setState(() {
+                                                              _photoDownloadWorking =
+                                                                  false;
+                                                            });
+                                                          }
+                                                        }
+                                                      },
+                                                icon: const Icon(
+                                                  Icons.download_rounded,
+                                                ),
+                                                label: const Text(
+                                                  '다운로드',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: OutlinedButton.icon(
+                                                onPressed: _photoDownloadWorking
+                                                    ? null
+                                                    : () async {
+                                                        // 삭제 확인 다이얼로그
+                                                        final confirmed = await showDialog<bool>(
+                                                          context: context,
+                                                          builder: (ctx) => AlertDialog(
+                                                            title: const Text(
+                                                              '사진 삭제',
+                                                            ),
+                                                            content: Text(
+                                                              '선택한 ${_selectedPhotoIds.length}개의 사진을 삭제하시겠습니까?',
+                                                            ),
+                                                            actions: [
+                                                              TextButton(
+                                                                onPressed: () =>
+                                                                    Navigator.pop(
+                                                                      ctx,
+                                                                      false,
                                                                     ),
-                                                                  );
-                                                                  setState(() {
-                                                                    _photoSelectionMode =
-                                                                        false;
-                                                                    _selectedPhotoIds
-                                                                        .clear();
-                                                                  });
-                                                                } catch (e) {
-                                                                  if (!mounted) {
-                                                                    return;
-                                                                  }
-                                                                  ScaffoldMessenger.of(
-                                                                    context,
-                                                                  ).showSnackBar(
-                                                                    SnackBar(
-                                                                      content: Text(
-                                                                        '다운로드 중 오류: $e',
-                                                                      ),
+                                                                child:
+                                                                    const Text(
+                                                                      '취소',
                                                                     ),
-                                                                  );
-                                                                } finally {
-                                                                  if (mounted) {
-                                                                    setState(() {
-                                                                      _photoDownloadWorking =
-                                                                          false;
-                                                                    });
-                                                                  }
-                                                                }
-                                                              },
-                                                        icon: const Icon(
-                                                          Icons
-                                                              .download_rounded,
-                                                        ),
-                                                        label: const Text(
-                                                          '다운로드',
-                                                          style: TextStyle(
-                                                            fontSize: 13,
+                                                              ),
+                                                              TextButton(
+                                                                onPressed: () =>
+                                                                    Navigator.pop(
+                                                                      ctx,
+                                                                      true,
+                                                                    ),
+                                                                style: TextButton.styleFrom(
+                                                                  foregroundColor:
+                                                                      Colors
+                                                                          .red,
+                                                                ),
+                                                                child:
+                                                                    const Text(
+                                                                      '삭제',
+                                                                    ),
+                                                              ),
+                                                            ],
                                                           ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Expanded(
-                                                      child: OutlinedButton.icon(
-                                                        onPressed:
-                                                            _photoDownloadWorking
-                                                            ? null
-                                                            : () async {
-                                                                // 삭제 확인 다이얼로그
-                                                                final confirmed = await showDialog<bool>(
-                                                                  context:
-                                                                      context,
-                                                                  builder: (ctx) => AlertDialog(
-                                                                    title:
-                                                                        const Text(
-                                                                          '사진 삭제',
-                                                                        ),
-                                                                    content: Text(
-                                                                      '선택한 ${_selectedPhotoIds.length}개의 사진을 삭제하시겠습니까?',
-                                                                    ),
-                                                                    actions: [
-                                                                      TextButton(
-                                                                        onPressed: () => Navigator.pop(
-                                                                          ctx,
-                                                                          false,
-                                                                        ),
-                                                                        child: const Text(
-                                                                          '취소',
-                                                                        ),
-                                                                      ),
-                                                                      TextButton(
-                                                                        onPressed: () => Navigator.pop(
-                                                                          ctx,
-                                                                          true,
-                                                                        ),
-                                                                        style: TextButton.styleFrom(
-                                                                          foregroundColor:
-                                                                              Colors.red,
-                                                                        ),
-                                                                        child: const Text(
-                                                                          '삭제',
-                                                                        ),
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                );
-                                                                if (confirmed !=
-                                                                        true ||
-                                                                    !mounted) {
-                                                                  return;
-                                                                }
-                                                                setState(() {
-                                                                  _photoDownloadWorking =
-                                                                      true;
-                                                                });
-                                                                try {
-                                                                  final photoProvider =
-                                                                      context
-                                                                          .read<
-                                                                            PhotoProvider
-                                                                          >();
-                                                                  final photoApi =
-                                                                      PhotoApi();
-                                                                  int
-                                                                  successCount =
-                                                                      0;
-                                                                  int
-                                                                  failCount = 0;
-                                                                  for (final photoId
-                                                                      in _selectedPhotoIds) {
-                                                                    try {
-                                                                      // 사진 삭제 전에 imageUrl 가져오기 (썸네일 확인용)
-                                                                      String?
-                                                                      photoImageUrl;
-                                                                      try {
-                                                                        final matchingPhotos = photoProvider.items.where(
+                                                        );
+                                                        if (confirmed != true ||
+                                                            !mounted) {
+                                                          return;
+                                                        }
+                                                        setState(() {
+                                                          _photoDownloadWorking =
+                                                              true;
+                                                        });
+                                                        try {
+                                                          final photoProvider =
+                                                              context
+                                                                  .read<
+                                                                    PhotoProvider
+                                                                  >();
+                                                          final photoApi =
+                                                              PhotoApi();
+                                                          int successCount = 0;
+                                                          int failCount = 0;
+                                                          for (final photoId
+                                                              in _selectedPhotoIds) {
+                                                            try {
+                                                              // 사진 삭제 전에 imageUrl 가져오기 (썸네일 확인용)
+                                                              String?
+                                                              photoImageUrl;
+                                                              try {
+                                                                final matchingPhotos =
+                                                                    photoProvider
+                                                                        .items
+                                                                        .where(
                                                                           (p) =>
                                                                               p.photoId ==
                                                                               photoId,
                                                                         );
-                                                                        if (matchingPhotos
-                                                                            .isNotEmpty) {
-                                                                          photoImageUrl = matchingPhotos
-                                                                              .first
-                                                                              .imageUrl;
-                                                                        }
-                                                                      } catch (
-                                                                        _
-                                                                      ) {
-                                                                        // 사진 정보를 찾을 수 없으면 무시
+                                                                if (matchingPhotos
+                                                                    .isNotEmpty) {
+                                                                  photoImageUrl =
+                                                                      matchingPhotos
+                                                                          .first
+                                                                          .imageUrl;
+                                                                }
+                                                              } catch (_) {
+                                                                // 사진 정보를 찾을 수 없으면 무시
+                                                              }
+
+                                                              await photoApi
+                                                                  .deletePhoto(
+                                                                    photoId,
+                                                                  );
+                                                              photoProvider
+                                                                  .removeById(
+                                                                    photoId,
+                                                                  );
+
+                                                              // 삭제된 사진이 썸네일인 앨범들을 찾아서 자동으로 썸네일 변경
+                                                              if (photoImageUrl !=
+                                                                      null &&
+                                                                  photoImageUrl
+                                                                      .isNotEmpty) {
+                                                                final albumProvider =
+                                                                    context
+                                                                        .read<
+                                                                          AlbumProvider
+                                                                        >();
+                                                                final albums =
+                                                                    albumProvider
+                                                                        .albums;
+                                                                for (final album
+                                                                    in albums) {
+                                                                  // 앨범의 썸네일 URL이 삭제된 사진의 imageUrl과 일치하는지 확인
+                                                                  if (album
+                                                                          .coverPhotoUrl ==
+                                                                      photoImageUrl) {
+                                                                    try {
+                                                                      // 자동으로 앨범 내 다른 사진으로 썸네일 변경
+                                                                      final res = await AlbumApi.setThumbnail(
+                                                                        albumId:
+                                                                            album.albumId,
+                                                                        photoId:
+                                                                            null, // null이면 자동으로 최신 사진 선택
+                                                                      );
+                                                                      // 썸네일 URL 업데이트
+                                                                      if (res['thumbnailUrl'] !=
+                                                                          null) {
+                                                                        albumProvider.updateCoverUrl(
+                                                                          album
+                                                                              .albumId,
+                                                                          res['thumbnailUrl']
+                                                                              as String?,
+                                                                        );
                                                                       }
-
-                                                                      await photoApi
-                                                                          .deletePhoto(
-                                                                            photoId,
-                                                                          );
-                                                                      photoProvider
-                                                                          .removeById(
-                                                                            photoId,
-                                                                          );
-
-                                                                      // 삭제된 사진이 썸네일인 앨범들을 찾아서 자동으로 썸네일 변경
-                                                                      if (photoImageUrl !=
-                                                                              null &&
-                                                                          photoImageUrl
-                                                                              .isNotEmpty) {
-                                                                        final albumProvider = context
-                                                                            .read<
-                                                                              AlbumProvider
-                                                                            >();
-                                                                        final albums =
-                                                                            albumProvider.albums;
-                                                                        for (final album
-                                                                            in albums) {
-                                                                          // 앨범의 썸네일 URL이 삭제된 사진의 imageUrl과 일치하는지 확인
-                                                                          if (album.coverPhotoUrl ==
-                                                                              photoImageUrl) {
-                                                                            try {
-                                                                              // 자동으로 앨범 내 다른 사진으로 썸네일 변경
-                                                                              final res = await AlbumApi.setThumbnail(
-                                                                                albumId: album.albumId,
-                                                                                photoId: null, // null이면 자동으로 최신 사진 선택
-                                                                              );
-                                                                              // 썸네일 URL 업데이트
-                                                                              if (res['thumbnailUrl'] !=
-                                                                                  null) {
-                                                                                albumProvider.updateCoverUrl(
-                                                                                  album.albumId,
-                                                                                  res['thumbnailUrl']
-                                                                                      as String?,
-                                                                                );
-                                                                              }
-                                                                            } catch (
-                                                                              e
-                                                                            ) {
-                                                                              debugPrint(
-                                                                                '⚠️ 앨범 썸네일 자동 변경 실패 (albumId: ${album.albumId}): $e',
-                                                                              );
-                                                                            }
-                                                                          }
-                                                                        }
-                                                                      }
-
-                                                                      successCount++;
                                                                     } catch (
                                                                       e
                                                                     ) {
-                                                                      failCount++;
                                                                       debugPrint(
-                                                                        '⚠️ 사진 삭제 실패 (photoId: $photoId): $e',
+                                                                        '⚠️ 앨범 썸네일 자동 변경 실패 (albumId: ${album.albumId}): $e',
                                                                       );
                                                                     }
                                                                   }
-                                                                  if (!mounted)
-                                                                    return;
-                                                                  setState(() {
-                                                                    _photoSelectionMode =
-                                                                        false;
-                                                                    _selectedPhotoIds
-                                                                        .clear();
-                                                                  });
-                                                                  ScaffoldMessenger.of(
-                                                                    context,
-                                                                  ).showSnackBar(
-                                                                    SnackBar(
-                                                                      content: Text(
-                                                                        failCount >
-                                                                                0
-                                                                            ? '$successCount개 삭제 완료, $failCount개 실패'
-                                                                            : '$successCount개의 사진이 삭제되었습니다.',
-                                                                      ),
-                                                                    ),
-                                                                  );
-                                                                } catch (e) {
-                                                                  if (!mounted)
-                                                                    return;
-                                                                  ScaffoldMessenger.of(
-                                                                    context,
-                                                                  ).showSnackBar(
-                                                                    SnackBar(
-                                                                      content: Text(
-                                                                        '삭제 중 오류: $e',
-                                                                      ),
-                                                                    ),
-                                                                  );
-                                                                } finally {
-                                                                  if (mounted) {
-                                                                    setState(() {
-                                                                      _photoDownloadWorking =
-                                                                          false;
-                                                                    });
-                                                                  }
                                                                 }
-                                                              },
-                                                        icon: const Icon(
-                                                          Icons.delete_outline,
-                                                        ),
-                                                        label: const Text(
-                                                          '삭제',
-                                                          style: TextStyle(
-                                                            fontSize: 13,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
+                                                              }
+
+                                                              successCount++;
+                                                            } catch (e) {
+                                                              failCount++;
+                                                              debugPrint(
+                                                                '⚠️ 사진 삭제 실패 (photoId: $photoId): $e',
+                                                              );
+                                                            }
+                                                          }
+                                                          if (!mounted) return;
+                                                          setState(() {
+                                                            _photoSelectionMode =
+                                                                false;
+                                                            _selectedPhotoIds
+                                                                .clear();
+                                                          });
+                                                          ScaffoldMessenger.of(
+                                                            context,
+                                                          ).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text(
+                                                                failCount > 0
+                                                                    ? '$successCount개 삭제 완료, $failCount개 실패'
+                                                                    : '$successCount개의 사진이 삭제되었습니다.',
+                                                              ),
+                                                            ),
+                                                          );
+                                                        } catch (e) {
+                                                          if (!mounted) return;
+                                                          ScaffoldMessenger.of(
+                                                            context,
+                                                          ).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text(
+                                                                '삭제 중 오류: $e',
+                                                              ),
+                                                            ),
+                                                          );
+                                                        } finally {
+                                                          if (mounted) {
+                                                            setState(() {
+                                                              _photoDownloadWorking =
+                                                                  false;
+                                                            });
+                                                          }
+                                                        }
+                                                      },
+                                                icon: const Icon(
+                                                  Icons.delete_outline,
+                                                ),
+                                                label: const Text(
+                                                  '삭제',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                      ],
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                )),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1735,8 +1728,16 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
                                               color: Color(0xFFE0E0E0),
                                             ),
                                       )
-                                    : const ColoredBox(
-                                        color: Color(0xFFE0E0E0),
+                                    : Container(
+                                        color: const Color(0xFFE0E0E0),
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.favorite,
+                                            size: 100, // 하트 크기 살짝 키움
+                                            color:
+                                                Colors.lightBlueAccent.shade200,
+                                          ),
+                                        ),
                                       ),
                               ),
                               // 즐겨찾기 표시 - AlbumProvider 상태 사용

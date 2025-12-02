@@ -782,20 +782,20 @@ class _MyPageScreenState extends State<MyPageScreen> {
                                             color: isAuthError
                                                 ? Colors.orange
                                                 : AppColors.textSecondary,
-                                          ),
-                                          const SizedBox(width: 8),
+                                      ),
+                                      const SizedBox(width: 8),
                                           Expanded(
-                                            child: Text(
+                                        child: Text(
                                               isAuthError
                                                   ? '인증이 만료되었습니다. 다시 로그인해주세요.'
                                                   : '저장 한도 정보를 불러오지 못했습니다.',
-                                              style: TextStyle(
+                                          style: TextStyle(
                                                 color: isAuthError
                                                     ? Colors.orange
                                                     : AppColors.textSecondary,
-                                              ),
-                                            ),
                                           ),
+                                        ),
+                                      ),
                                         ],
                                       ),
                                       const SizedBox(height: 8),
@@ -815,14 +815,14 @@ class _MyPageScreenState extends State<MyPageScreen> {
                                               child: const Text('로그인하기'),
                                             )
                                           else
-                                            TextButton(
-                                              onPressed: () {
-                                                setState(() {
-                                                  _quotaFuture =
-                                                      StorageApi.fetchQuota();
-                                                });
-                                              },
-                                              child: const Text('다시 시도'),
+                                      TextButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            _quotaFuture =
+                                                StorageApi.fetchQuota();
+                                          });
+                                        },
+                                        child: const Text('다시 시도'),
                                             ),
                                         ],
                                       ),

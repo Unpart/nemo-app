@@ -128,10 +128,10 @@ class AlbumApi {
     final uri = _uri('/api/albums');
     final headers = _headersJson();
     final body = jsonEncode({
-      'title': title,
-      if (description != null) 'description': description,
-      if (coverPhotoId != null) 'coverPhotoId': coverPhotoId,
-      if (photoIdList != null) 'photoIdList': photoIdList,
+        'title': title,
+        if (description != null) 'description': description,
+        if (coverPhotoId != null) 'coverPhotoId': coverPhotoId,
+        if (photoIdList != null) 'photoIdList': photoIdList,
     });
 
     print('📁 [AlbumApi] createAlbum 요청 URL: $uri');
