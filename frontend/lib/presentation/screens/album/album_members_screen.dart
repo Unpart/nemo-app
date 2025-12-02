@@ -59,10 +59,13 @@ class _AlbumMembersScreenState extends State<AlbumMembersScreen> {
     }
   }
 
-  Future<void> _changeRole(int userId, String currentUserRole) async {
+  Future<void> _changeRole(int userId, String currentUserRole, String targetRole) async {
     final role = await showModalBottomSheet<String>(
       context: context,
-      builder: (_) => _RoleSheet(currentUserRole: currentUserRole),
+      builder: (_) => _RoleSheet(
+        currentUserRole: currentUserRole,
+        targetRole: targetRole,
+      ),
     );
     if (role == null) return;
     try {
@@ -210,8 +213,11 @@ class _AlbumMembersScreenState extends State<AlbumMembersScreen> {
 
                   // 권한 변경/강퇴 버튼 표시 조건:
                   // 1. 현재 사용자가 OWNER 또는 CO_OWNER
-                  // 2. 대상 멤버가 EDITOR 또는 VIEWER (OWNER, CO_OWNER는 변경/강퇴 불가)
-                  final targetIsEditable = role == 'EDITOR' || role == 'VIEWER';
+                  // 2. OWNER인 경우: CO_OWNER, EDITOR, VIEWER 모두 변경/강퇴 가능
+                  // 3. CO_OWNER인 경우: EDITOR, VIEWER만 변경/강퇴 가능
+                  final targetIsEditable = isCurrentUserOwner
+                      ? (role == 'CO_OWNER' || role == 'EDITOR' || role == 'VIEWER')
+                      : (role == 'EDITOR' || role == 'VIEWER');
                   final showActions = canManageMembers && targetIsEditable;
 
                   return ListTile(
@@ -227,7 +233,7 @@ class _AlbumMembersScreenState extends State<AlbumMembersScreen> {
                               IconButton(
                                 tooltip: '권한 변경',
                                 onPressed: () =>
-                                    _changeRole(userId, currentUserRole),
+                                    _changeRole(userId, currentUserRole, role),
                                 icon: const Icon(Icons.admin_panel_settings),
                               ),
                               IconButton(
@@ -251,12 +257,28 @@ class _AlbumMembersScreenState extends State<AlbumMembersScreen> {
 
 class _RoleSheet extends StatelessWidget {
   final String currentUserRole; // OWNER 또는 CO_OWNER
+  final String targetRole; // 변경 대상의 현재 역할
   final List<String> roles;
 
-  _RoleSheet({required this.currentUserRole})
-    : roles = currentUserRole == 'OWNER'
-          ? const ['VIEWER', 'EDITOR', 'CO_OWNER'] // OWNER는 모든 권한 변경 가능
-          : const ['VIEWER', 'EDITOR']; // CO_OWNER는 EDITOR, VIEWER만 변경 가능
+  _RoleSheet({
+    required this.currentUserRole,
+    required this.targetRole,
+  }) : roles = _getAvailableRoles(currentUserRole, targetRole);
+
+  static List<String> _getAvailableRoles(String currentUserRole, String targetRole) {
+    if (currentUserRole == 'OWNER') {
+      if (targetRole == 'CO_OWNER') {
+        // OWNER가 CO_OWNER를 변경할 때: EDITOR, VIEWER만 가능
+        return const ['EDITOR', 'VIEWER'];
+      } else {
+        // OWNER가 EDITOR/VIEWER를 변경할 때: 모든 권한 변경 가능
+        return const ['VIEWER', 'EDITOR', 'CO_OWNER'];
+      }
+    } else {
+      // CO_OWNER는 EDITOR, VIEWER만 변경 가능
+      return const ['VIEWER', 'EDITOR'];
+    }
+  }
 
   String _label(String role) {
     switch (role) {
