@@ -695,6 +695,8 @@ class _PhotoEditScreenState extends State<PhotoEditScreen> {
                           _brandCtrl.text = value;
                         } else {
                           _brandCtrl.clear();
+                          // 직접 입력 선택 시 위치 필드도 비우기
+                          _locationCtrl.clear();
                         }
                       });
 

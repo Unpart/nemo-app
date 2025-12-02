@@ -105,28 +105,40 @@ class _EmailLoginFormState extends State<EmailLoginForm> {
           _isLoading = false;
           final errorMsg = e.toString();
 
-          // Exception 접두사 및 기술적 메시지 제거, 사용자 친화적인 메시지로 변환
+          // Exception 접두사 제거, 사용자 친화적인 메시지로 변환
           String userMessage;
           if (errorMsg.startsWith('Exception: ')) {
             userMessage = errorMsg.substring('Exception: '.length);
-            // 네트워크 오류 메시지 정리
-            if (userMessage.startsWith('네트워크 오류: ')) {
-              userMessage = '네트워크 오류가 발생했습니다.';
-            } else if (userMessage.contains('네트워크')) {
-              userMessage = '네트워크 오류가 발생했습니다.';
+            
+            // 실제 네트워크 오류만 "네트워크 오류"로 변환
+            if (userMessage.startsWith('네트워크 오류: ') ||
+                userMessage.contains('서버에 연결할 수 없습니다') ||
+                userMessage.contains('SSL 인증서 오류') ||
+                userMessage.contains('요청 시간이 초과')) {
+              userMessage = userMessage.startsWith('네트워크 오류: ')
+                  ? '네트워크 오류가 발생했습니다.'
+                  : userMessage; // 구체적인 네트워크 오류 메시지는 그대로 표시
             }
-            // 기술적인 오류 코드나 메시지가 포함된 경우 일반 메시지로 변환
-            if (userMessage.contains('(40') ||
-                userMessage.contains('(50') ||
-                userMessage.contains('statusCode') ||
-                userMessage.contains('HttpException')) {
+            // 기술적인 오류 코드만 포함된 경우 (백엔드 메시지가 없는 경우)에만 일반 메시지로 변환
+            else if ((userMessage.contains('(40') ||
+                    userMessage.contains('(50') ||
+                    userMessage.contains('statusCode') ||
+                    userMessage.contains('HttpException')) &&
+                !userMessage.contains('이메일') &&
+                !userMessage.contains('비밀번호') &&
+                !userMessage.contains('올바르지') &&
+                !userMessage.contains('틀렸')) {
               userMessage = '로그인에 실패했습니다.';
             }
+            // 그 외의 경우는 백엔드에서 보낸 메시지를 그대로 표시
           } else if (errorMsg.contains('네트워크') ||
               errorMsg.contains('Network')) {
             userMessage = '네트워크 오류가 발생했습니다.';
           } else {
-            userMessage = '로그인에 실패했습니다.';
+            // 백엔드에서 보낸 구체적인 메시지가 있으면 그대로 표시
+            userMessage = errorMsg.startsWith('Exception: ')
+                ? errorMsg.substring('Exception: '.length)
+                : '로그인에 실패했습니다.';
           }
 
           _errorText = userMessage;

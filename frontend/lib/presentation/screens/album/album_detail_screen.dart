@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/providers/album_provider.dart';
@@ -11,6 +12,7 @@ import 'package:frontend/presentation/screens/photo/photo_viewer_screen.dart';
 import 'package:frontend/presentation/screens/album/album_members_screen.dart';
 import 'package:frontend/providers/user_provider.dart';
 import 'package:frontend/services/photo_download_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class AlbumDetailScreen extends StatefulWidget {
   final int albumId;
@@ -37,6 +39,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
   bool _roleLoading = false;
   bool _isLoadingDetail = false; // 무한 로딩 방지 플래그
   Future<Map<String, dynamic>>? _albumDetailFuture; // Future를 변수에 저장하여 무한 요청 방지
+  bool _initialLoadTried = false; // 앨범 상세 최초 로딩 시도 여부
 
   @override
   void initState() {
@@ -456,8 +459,10 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
         photoIdList: [],
       ),
     );
-    if (album.albumId == -1 && !_isLoadingDetail) {
+    if (album.albumId == -1 && !_isLoadingDetail && !_initialLoadTried) {
+      // 앨범 상세 최초 요청은 한 번만 수행 (에러 시 무한 재요청 방지)
       _isLoadingDetail = true;
+      _initialLoadTried = true;
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (mounted) {
           try {
@@ -531,7 +536,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
               }
             },
           ),
-          if (_roleLoading || _myRole != 'VIEWER') _buildActionsMenu(context),
+          // VIEWER도 멤버 조회와 다운로드 버튼을 볼 수 있어야 함
+          if (!_roleLoading) _buildActionsMenu(context),
         ],
       ),
       body: Column(
@@ -589,7 +595,7 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      
+
                       if (snapshot.hasError) {
                         final error = snapshot.error;
                         print('❌ [AlbumDetailScreen] 에러: $error');
@@ -597,16 +603,26 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                              const Icon(
+                                Icons.error_outline,
+                                size: 48,
+                                color: Colors.red,
+                              ),
                               const SizedBox(height: 16),
                               Text(
                                 '앨범을 불러오지 못했습니다',
-                                style: TextStyle(fontSize: 16, color: Colors.grey[700]),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey[700],
+                                ),
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 error.toString().replaceAll('Exception: ', ''),
-                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 16),
@@ -1009,8 +1025,10 @@ class _AlbumEditSheetState extends State<_AlbumEditSheet> {
   final _descCtrl = TextEditingController();
   int? _coverId;
   String? _coverUrl;
+  File? _coverFile; // 파일 업로드용
   bool _submitting = false;
   bool _initialized = false;
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void initState() {
@@ -1096,17 +1114,34 @@ class _AlbumEditSheetState extends State<_AlbumEditSheet> {
                                 child: SizedBox(
                                   height: 180,
                                   width: double.infinity,
-                                  child:
-                                      (displayCover != null &&
-                                          displayCover.isNotEmpty)
-                                      ? Image.network(
-                                          displayCover,
+                                  child: _coverFile != null
+                                      ? Image.file(
+                                          _coverFile!,
                                           fit: BoxFit.cover,
                                           errorBuilder: (_, __, ___) =>
                                               const ColoredBox(
                                                 color: Color(0xFFE0E0E0),
                                               ),
                                         )
+                                      : (displayCover != null &&
+                                            displayCover.isNotEmpty)
+                                      ? (displayCover.startsWith('http')
+                                            ? Image.network(
+                                                displayCover,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) =>
+                                                    const ColoredBox(
+                                                      color: Color(0xFFE0E0E0),
+                                                    ),
+                                              )
+                                            : Image.file(
+                                                File(displayCover),
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) =>
+                                                    const ColoredBox(
+                                                      color: Color(0xFFE0E0E0),
+                                                    ),
+                                              ))
                                       : const ColoredBox(
                                           color: Color(0xFFE0E0E0),
                                         ),
@@ -1115,67 +1150,125 @@ class _AlbumEditSheetState extends State<_AlbumEditSheet> {
                               const SizedBox(height: 8),
                               OutlinedButton.icon(
                                 onPressed: () async {
-                                  await showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    builder: (_) {
-                                      final alb = context
-                                          .read<AlbumProvider>()
-                                          .byId(widget.albumId);
-                                      final photos = context
-                                          .read<PhotoProvider>()
-                                          .items
-                                          .where(
-                                            (p) =>
-                                                (alb?.photoIdList ?? const [])
-                                                    .contains(p.photoId),
-                                          )
-                                          .toList();
-                                      return SafeArea(
-                                        child: SizedBox(
-                                          height:
-                                              MediaQuery.of(
-                                                context,
-                                              ).size.height *
-                                              0.6,
-                                          child: GridView.builder(
-                                            padding: const EdgeInsets.all(12),
-                                            gridDelegate:
-                                                const SliverGridDelegateWithFixedCrossAxisCount(
-                                                  crossAxisCount: 3,
-                                                  mainAxisSpacing: 8,
-                                                  crossAxisSpacing: 8,
-                                                  childAspectRatio:
-                                                      0.9, // 세로가 조금 더 긴 직사각형 비율
+                                  // 선택지 제공: 앨범 내 사진 선택 또는 파일 업로드
+                                  final choice =
+                                      await showModalBottomSheet<String>(
+                                        context: context,
+                                        builder: (_) => SafeArea(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              ListTile(
+                                                leading: const Icon(
+                                                  Icons.photo_library,
                                                 ),
-                                            itemCount: photos.length,
-                                            itemBuilder: (_, i) {
-                                              final p = photos[i];
-                                              return GestureDetector(
-                                                onTap: () {
-                                                  setState(() {
-                                                    _coverId = p.photoId;
-                                                    _coverUrl = p.imageUrl;
-                                                  });
-                                                  Navigator.pop(context);
-                                                },
-                                                child: Image.network(
-                                                  p.imageUrl,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (_, __, ___) =>
-                                                      const ColoredBox(
-                                                        color: Color(
-                                                          0xFFE0E0E0,
-                                                        ),
-                                                      ),
+                                                title: const Text('앨범 내 사진 선택'),
+                                                onTap: () => Navigator.pop(
+                                                  context,
+                                                  'gallery',
                                                 ),
-                                              );
-                                            },
+                                              ),
+                                              ListTile(
+                                                leading: const Icon(
+                                                  Icons.upload_file,
+                                                ),
+                                                title: const Text('파일 업로드'),
+                                                onTap: () => Navigator.pop(
+                                                  context,
+                                                  'upload',
+                                                ),
+                                              ),
+                                              ListTile(
+                                                leading: const Icon(
+                                                  Icons.cancel,
+                                                ),
+                                                title: const Text('취소'),
+                                                onTap: () =>
+                                                    Navigator.pop(context),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       );
-                                    },
-                                  );
+
+                                  if (choice == 'gallery') {
+                                    // 앨범 내 사진 선택
+                                    await showModalBottomSheet(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      builder: (_) {
+                                        final alb = context
+                                            .read<AlbumProvider>()
+                                            .byId(widget.albumId);
+                                        final photos = context
+                                            .read<PhotoProvider>()
+                                            .items
+                                            .where(
+                                              (p) =>
+                                                  (alb?.photoIdList ?? const [])
+                                                      .contains(p.photoId),
+                                            )
+                                            .toList();
+                                        return SafeArea(
+                                          child: SizedBox(
+                                            height:
+                                                MediaQuery.of(
+                                                  context,
+                                                ).size.height *
+                                                0.6,
+                                            child: GridView.builder(
+                                              padding: const EdgeInsets.all(12),
+                                              gridDelegate:
+                                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                                    crossAxisCount: 3,
+                                                    mainAxisSpacing: 8,
+                                                    crossAxisSpacing: 8,
+                                                    childAspectRatio:
+                                                        0.9, // 세로가 조금 더 긴 직사각형 비율
+                                                  ),
+                                              itemCount: photos.length,
+                                              itemBuilder: (_, i) {
+                                                final p = photos[i];
+                                                return GestureDetector(
+                                                  onTap: () {
+                                                    setState(() {
+                                                      _coverId = p.photoId;
+                                                      _coverUrl = p.imageUrl;
+                                                      _coverFile =
+                                                          null; // 파일 선택 취소
+                                                    });
+                                                    Navigator.pop(context);
+                                                  },
+                                                  child: Image.network(
+                                                    p.imageUrl,
+                                                    fit: BoxFit.cover,
+                                                    errorBuilder:
+                                                        (_, __, ___) =>
+                                                            const ColoredBox(
+                                                              color: Color(
+                                                                0xFFE0E0E0,
+                                                              ),
+                                                            ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  } else if (choice == 'upload') {
+                                    // 파일 업로드
+                                    final XFile? image = await _imagePicker
+                                        .pickImage(source: ImageSource.gallery);
+                                    if (image != null && mounted) {
+                                      setState(() {
+                                        _coverFile = File(image.path);
+                                        _coverId = null; // 사진 선택 취소
+                                        _coverUrl = image.path; // 미리보기용
+                                      });
+                                    }
+                                  }
                                 },
                                 icon: const Icon(Icons.image_outlined),
                                 label: const Text('대표사진 수정'),
@@ -1222,7 +1315,28 @@ class _AlbumEditSheetState extends State<_AlbumEditSheet> {
                                     );
 
                                     // 대표사진 수정 (명세서에 따른 별도 API 호출)
-                                    if (_coverId != null) {
+                                    if (_coverFile != null) {
+                                      // 파일 업로드 방식
+                                      final thumbnailRes =
+                                          await AlbumApi.uploadThumbnailFile(
+                                            albumId: widget.albumId,
+                                            file: _coverFile!,
+                                          );
+
+                                      // 응답에서 thumbnailUrl 가져오기
+                                      final thumbnailUrl =
+                                          thumbnailRes['thumbnailUrl']
+                                              as String?;
+                                      if (thumbnailUrl != null) {
+                                        context
+                                            .read<AlbumProvider>()
+                                            .updateCoverUrl(
+                                              widget.albumId,
+                                              thumbnailUrl,
+                                            );
+                                      }
+                                    } else if (_coverId != null) {
+                                      // 앨범 내 사진 선택 방식
                                       final thumbnailRes =
                                           await AlbumApi.setThumbnail(
                                             albumId: widget.albumId,

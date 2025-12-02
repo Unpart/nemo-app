@@ -106,8 +106,14 @@ class AlbumProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void addFromResponse(Map<String, dynamic> res) {
-    final albumId = res['albumId'] as int;
+  void addFromResponse(Map<String, dynamic> res, {bool silent = false}) {
+    // albumId 안전하게 파싱 (Long → int 변환 처리)
+    final albumIdValue = res['albumId'];
+    if (albumIdValue == null) {
+      debugPrint('⚠️ [AlbumProvider] addFromResponse: albumId가 null입니다.');
+      return;
+    }
+    final albumId = (albumIdValue as num).toInt();
 
     // photoIdList 파싱 (Long → int 변환 처리)
     List<int> photoIdList = [];
@@ -163,7 +169,9 @@ class AlbumProvider extends ChangeNotifier {
         createdAt: (res['createdAt'] as String?) ?? '',
         photoIdList: photoIdList,
       );
-      notifyListeners();
+      if (!silent) {
+        notifyListeners();
+      }
       return;
     }
     // 새 앨범인 경우에만 추가
@@ -177,7 +185,12 @@ class AlbumProvider extends ChangeNotifier {
       photoIdList: photoIdList,
     );
     _albums.insert(0, item);
-    notifyListeners();
+
+    // silent 모드면 notifyListeners를 호출하지 않음
+    // (화면 전환 애니메이션 중 충돌 방지)
+    if (!silent) {
+      notifyListeners();
+    }
   }
 
   AlbumItem? byId(int albumId) {

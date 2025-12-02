@@ -135,19 +135,41 @@ class AuthService {
     } catch (e, stackTrace) {
       print('❌ [LOGIN] 에러 발생: $e');
       print('❌ [LOGIN] 스택 트레이스: $stackTrace');
-      // 원본 에러 메시지를 더 자세히 전달
-      if (e.toString().contains('SocketException') ||
-          e.toString().contains('Failed host lookup') ||
-          e.toString().contains('Connection refused') ||
-          e.toString().contains('Network is unreachable')) {
+
+      // 이미 Exception으로 throw된 경우 (401, 400 등)는 그대로 다시 throw
+      if (e is Exception) {
+        final errorStr = e.toString();
+        // 백엔드에서 보낸 구체적인 에러 메시지는 그대로 전달
+        if (errorStr.startsWith('Exception: ')) {
+          final message = errorStr.substring('Exception: '.length);
+          // 네트워크 관련 에러가 아닌 경우 (이메일/비밀번호 오류 등)는 그대로 전달
+          if (!message.contains('SocketException') &&
+              !message.contains('Failed host lookup') &&
+              !message.contains('Connection refused') &&
+              !message.contains('Network is unreachable') &&
+              !message.contains('HandshakeException') &&
+              !message.contains('Certificate') &&
+              !message.contains('TimeoutException')) {
+            throw e; // 원본 Exception 그대로 다시 throw
+          }
+        }
+      }
+
+      // 실제 네트워크 오류만 처리
+      final errorStr = e.toString();
+      if (errorStr.contains('SocketException') ||
+          errorStr.contains('Failed host lookup') ||
+          errorStr.contains('Connection refused') ||
+          errorStr.contains('Network is unreachable')) {
         throw Exception('서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.');
-      } else if (e.toString().contains('HandshakeException') ||
-          e.toString().contains('Certificate')) {
+      } else if (errorStr.contains('HandshakeException') ||
+          errorStr.contains('Certificate')) {
         throw Exception('SSL 인증서 오류가 발생했습니다.');
-      } else if (e.toString().contains('TimeoutException')) {
+      } else if (errorStr.contains('TimeoutException')) {
         throw Exception('요청 시간이 초과되었습니다.');
       }
-      throw Exception('네트워크 오류: $e');
+      // 그 외의 경우는 원본 에러를 그대로 전달
+      throw e;
     }
   }
 

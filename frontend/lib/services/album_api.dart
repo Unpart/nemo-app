@@ -125,22 +125,46 @@ class AlbumApi {
       };
     }
 
-    final res = await http.post(
-      _uri('/api/albums'),
-      headers: _headersJson(),
-      // API 명세서: photoIdList 필드명 사용
-      body: jsonEncode({
-        'title': title,
-        if (description != null) 'description': description,
-        if (coverPhotoId != null) 'coverPhotoId': coverPhotoId,
-        if (photoIdList != null) 'photoIdList': photoIdList,
-      }),
-    );
+    final uri = _uri('/api/albums');
+    final headers = _headersJson();
+    final body = jsonEncode({
+      'title': title,
+      if (description != null) 'description': description,
+      if (coverPhotoId != null) 'coverPhotoId': coverPhotoId,
+      if (photoIdList != null) 'photoIdList': photoIdList,
+    });
+
+    print('📁 [AlbumApi] createAlbum 요청 URL: $uri');
+    print('📁 [AlbumApi] 헤더: $headers');
+    print('📁 [AlbumApi] 요청 본문: $body');
+
+    final res = await http.post(uri, headers: headers, body: body);
+
+    print('📁 [AlbumApi] 응답 상태: ${res.statusCode}');
+    print('📁 [AlbumApi] 응답 본문: ${res.body}');
 
     if (res.statusCode == 201 || res.statusCode == 200) {
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
-    throw Exception('Failed to create album (${res.statusCode})');
+
+    if (res.statusCode == 400) {
+      // 400 에러의 경우 상세 메시지 확인
+      final errorBody = res.body.isNotEmpty ? jsonDecode(res.body) : {};
+      final message = errorBody['message'] as String?;
+      final error = errorBody['error'] as String?;
+      print(
+        '🔴 [AlbumApi] 400 에러 상세: message=$message, error=$error, body=$errorBody',
+      );
+      throw Exception(message ?? error ?? '잘못된 요청입니다. (400)');
+    }
+
+    if (res.statusCode == 401) {
+      final errorBody = res.body.isNotEmpty ? jsonDecode(res.body) : {};
+      final message = errorBody['message'] as String?;
+      throw Exception(message ?? '로그인이 필요합니다.');
+    }
+
+    throw Exception('앨범 생성 실패 (${res.statusCode})');
   }
 
   // POST /api/albums/{albumId}/favorite
@@ -719,6 +743,26 @@ class AlbumApi {
         if (e is Exception) rethrow;
       }
       throw Exception('공유받은 앨범은 삭제할 수 없습니다.');
+    }
+    if (res.statusCode == 409) {
+      // 데이터베이스 제약 조건 위반 (CONSTRAINT_VIOLATION)
+      try {
+        final body = res.body.isNotEmpty ? jsonDecode(res.body) : {};
+        final message = body['message'] as String?;
+        final code = body['code'] as String?;
+        // 백엔드에서 "중복 데이터로 처리할 수 없습니다." 메시지가 오면
+        // 더 명확한 메시지로 변경
+        if (message != null && message.isNotEmpty) {
+          if (message.contains('중복 데이터') || code == 'CONSTRAINT_VIOLATION') {
+            throw Exception('앨범을 삭제할 수 없습니다. 앨범에 연결된 데이터가 있어 삭제할 수 없습니다.');
+          }
+          throw Exception(message);
+        }
+      } catch (e) {
+        // 이미 Exception이면 그대로 던지고, 아니면 기본 메시지
+        if (e is Exception) rethrow;
+      }
+      throw Exception('앨범을 삭제할 수 없습니다. 연결된 데이터가 있습니다.');
     }
     if (res.statusCode == 404) throw Exception('ALBUM_NOT_FOUND');
     throw Exception('Failed to delete album (${res.statusCode})');

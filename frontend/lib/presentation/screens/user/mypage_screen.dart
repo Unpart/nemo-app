@@ -758,33 +758,73 @@ class _MyPageScreenState extends State<MyPageScreen> {
                               );
                             }
                             if (snapshot.hasError || !snapshot.hasData) {
+                              final errorMessage = snapshot.hasError
+                                  ? snapshot.error.toString()
+                                  : '저장 한도 정보를 불러오지 못했습니다.';
+                              final isAuthError = errorMessage.contains('인증') ||
+                                  errorMessage.contains('토큰') ||
+                                  errorMessage.contains('로그인') ||
+                                  errorMessage.contains('401');
+                              
                               return Card(
                                 elevation: 0,
                                 child: Padding(
                                   padding: const EdgeInsets.all(16),
-                                  child: Row(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Icon(
-                                        Icons.info_outline,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      const Expanded(
-                                        child: Text(
-                                          '저장 한도 정보를 불러오지 못했습니다.',
-                                          style: TextStyle(
-                                            color: AppColors.textSecondary,
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            isAuthError
+                                                ? Icons.error_outline
+                                                : Icons.info_outline,
+                                            color: isAuthError
+                                                ? Colors.orange
+                                                : AppColors.textSecondary,
                                           ),
-                                        ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              isAuthError
+                                                  ? '인증이 만료되었습니다. 다시 로그인해주세요.'
+                                                  : '저장 한도 정보를 불러오지 못했습니다.',
+                                              style: TextStyle(
+                                                color: isAuthError
+                                                    ? Colors.orange
+                                                    : AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      TextButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            _quotaFuture =
-                                                StorageApi.fetchQuota();
-                                          });
-                                        },
-                                        child: const Text('다시 시도'),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.end,
+                                        children: [
+                                          if (isAuthError)
+                                            TextButton(
+                                              onPressed: () {
+                                                Navigator.pushReplacement(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) => const LoginScreen(),
+                                                  ),
+                                                );
+                                              },
+                                              child: const Text('로그인하기'),
+                                            )
+                                          else
+                                            TextButton(
+                                              onPressed: () {
+                                                setState(() {
+                                                  _quotaFuture =
+                                                      StorageApi.fetchQuota();
+                                                });
+                                              },
+                                              child: const Text('다시 시도'),
+                                            ),
+                                        ],
                                       ),
                                     ],
                                   ),

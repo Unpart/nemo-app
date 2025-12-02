@@ -219,27 +219,39 @@ class _EmailLoginFormState extends State<_EmailLoginForm> {
           final errorMsg = e.toString();
           String message;
 
-          // Exception 접두사 및 기술적 메시지 제거, 사용자 친화적인 메시지로 변환
+          // Exception 접두사 제거, 사용자 친화적인 메시지로 변환
           if (errorMsg.startsWith('Exception: ')) {
             message = errorMsg.substring('Exception: '.length);
-            // 네트워크 오류 메시지 정리
-            if (message.startsWith('네트워크 오류: ')) {
-              message = '네트워크 오류가 발생했습니다.';
-            } else if (message.contains('네트워크')) {
-              message = '네트워크 오류가 발생했습니다.';
+            
+            // 실제 네트워크 오류만 "네트워크 오류"로 변환
+            if (message.startsWith('네트워크 오류: ') ||
+                message.contains('서버에 연결할 수 없습니다') ||
+                message.contains('SSL 인증서 오류') ||
+                message.contains('요청 시간이 초과')) {
+              message = message.startsWith('네트워크 오류: ')
+                  ? '네트워크 오류가 발생했습니다.'
+                  : message; // 구체적인 네트워크 오류 메시지는 그대로 표시
             }
-            // 기술적인 오류 코드나 메시지가 포함된 경우 일반 메시지로 변환
-            if (message.contains('(40') ||
-                message.contains('(50') ||
-                message.contains('statusCode') ||
-                message.contains('HttpException')) {
+            // 기술적인 오류 코드만 포함된 경우 (백엔드 메시지가 없는 경우)에만 일반 메시지로 변환
+            else if ((message.contains('(40') ||
+                    message.contains('(50') ||
+                    message.contains('statusCode') ||
+                    message.contains('HttpException')) &&
+                !message.contains('이메일') &&
+                !message.contains('비밀번호') &&
+                !message.contains('올바르지') &&
+                !message.contains('틀렸')) {
               message = '로그인에 실패했습니다.';
             }
+            // 그 외의 경우는 백엔드에서 보낸 메시지를 그대로 표시
           } else if (errorMsg.contains('네트워크') ||
               errorMsg.contains('Network')) {
             message = '네트워크 오류가 발생했습니다.';
           } else {
-            message = '로그인에 실패했습니다.';
+            // 백엔드에서 보낸 구체적인 메시지가 있으면 그대로 표시
+            message = errorMsg.startsWith('Exception: ')
+                ? errorMsg.substring('Exception: '.length)
+                : '로그인에 실패했습니다.';
           }
 
           ScaffoldMessenger.of(context).showSnackBar(

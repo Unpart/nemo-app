@@ -82,8 +82,19 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
     } else {
       _selectedBrand = '직접 입력';
     }
-    // 갤러리 업로드인 경우에만 화면 진입 시 자동 채움 (QR 업로드는 브랜드 선택 시 자동 채움)
-    if (widget.qrCode == null) {
+    if (widget.qrCode != null) {
+      // QR 업로드인 경우: 브랜드가 이미 있으면 한 번 자동으로 주변 포토부스를 검색해 위치 채움
+      if (currentBrand.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          // QR에서 위치가 비어 있을 때만 자동 채움 (사용자 입력은 덮어쓰지 않음)
+          _updateLocationByBrand(
+            currentBrand,
+            forceUpdate: _locationCtrl.text.trim().isEmpty,
+          );
+        });
+      }
+    } else {
+      // 갤러리 업로드인 경우에만 화면 진입 시 자동 채움 (기존 동작 유지)
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _initDefaultLocationFromMap();
       });
@@ -310,6 +321,186 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
     } catch (_) {
       // 위치/지도 로딩 실패 시 무시 (기본값 미설정 상태로 두기)
     }
+  }
+
+  /// 사용자가 위치를 수정하려 할 때 호출되는 검색 시트
+  /// - 사용자가 입력한 지역 키워드 + 브랜드 값으로 주변 포토부스를 검색해 목록으로 보여줌
+  Future<void> _openLocationSearchSheet() async {
+    if (!mounted) return;
+
+    String keyword = _locationCtrl.text.trim();
+    final brand = _brandCtrl.text.trim();
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        List<Map<String, dynamic>> results = [];
+        bool loading = false;
+        String? error;
+
+        Future<void> search(
+          BuildContext sheetContext,
+          StateSetter setModalState,
+        ) async {
+          if (keyword.trim().isEmpty) return;
+          if (!sheetContext.mounted) return;
+          setModalState(() {
+            loading = true;
+            error = null;
+          });
+          try {
+            // 현재 위치 기준 넓은 뷰포트에서 브랜드 필터로 후보 포토부스를 가져온 뒤,
+            // 이름/주소에 사용자가 입력한 지역 키워드가 포함된 것만 필터링
+            LocationPermission permission = await Geolocator.checkPermission();
+            if (permission == LocationPermission.denied) {
+              permission = await Geolocator.requestPermission();
+            }
+            if (permission != LocationPermission.whileInUse &&
+                permission != LocationPermission.always) {
+              throw Exception('위치 권한이 필요합니다.');
+            }
+
+            final position = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high,
+              timeLimit: const Duration(seconds: 5),
+            );
+
+            const delta = 0.1; // 검색 범위 넓게 (약 수 km 반경)
+            final res = await MapApi.getViewport(
+              neLat: position.latitude + delta,
+              neLng: position.longitude + delta,
+              swLat: position.latitude - delta,
+              swLng: position.longitude - delta,
+              zoom: 13,
+              brand: brand.isNotEmpty ? brand : null,
+              limit: 200,
+              cluster: true,
+            );
+            if (!sheetContext.mounted) return;
+            final items = (res['items'] as List<dynamic>? ?? const [])
+                .where((item) {
+                  if (item is! Map) return false;
+                  if (item['cluster'] == true) return false;
+                  final name = (item['name'] as String? ?? '').toLowerCase();
+                  final road = (item['roadAddress'] as String? ?? '')
+                      .toLowerCase();
+                  final key = keyword.toLowerCase();
+                  return name.contains(key) || road.contains(key);
+                })
+                .cast<Map<String, dynamic>>()
+                .toList();
+
+            if (!sheetContext.mounted) return;
+            setModalState(() {
+              results = items;
+            });
+          } catch (e) {
+            if (!sheetContext.mounted) return;
+            setModalState(() {
+              error = e.toString();
+            });
+          } finally {
+            if (!sheetContext.mounted) return;
+            setModalState(() {
+              loading = false;
+            });
+          }
+        }
+
+        return StatefulBuilder(
+          builder: (sheetContext, setModalState) {
+            final controller = TextEditingController(text: keyword);
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 16,
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      decoration: const InputDecoration(
+                        labelText: '지역 검색 (예: 홍대, 강남)',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      controller: controller,
+                      onChanged: (v) {
+                        keyword = v;
+                      },
+                      onSubmitted: (_) => search(sheetContext, setModalState),
+                    ),
+                    const SizedBox(height: 12),
+                    if (loading)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    else if (error != null)
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          error!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      )
+                    else if (results.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Text('검색 결과가 없습니다.'),
+                      )
+                    else
+                      Flexible(
+                        child: ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: results.length,
+                          itemBuilder: (_, i) {
+                            final item = results[i];
+                            final name = item['name'] as String? ?? '';
+                            final road = item['roadAddress'] as String? ?? '';
+                            return ListTile(
+                              leading: const Icon(Icons.photo_camera_back),
+                              title: Text(name.isNotEmpty ? name : road),
+                              subtitle: road.isNotEmpty && name.isNotEmpty
+                                  ? Text(road)
+                                  : null,
+                              onTap: () {
+                                setState(() {
+                                  _locationCtrl.text = road.isNotEmpty
+                                      ? '$name $road'.trim()
+                                      : (name.isNotEmpty ? name : road);
+                                  // 브랜드가 비어 있고 응답에 brand가 있으면 채우기
+                                  final itemBrand =
+                                      item['brand'] as String? ?? '';
+                                  if (_brandCtrl.text.trim().isEmpty &&
+                                      itemBrand.isNotEmpty) {
+                                    _brandCtrl.text = itemBrand;
+                                    if (_brandOptions.contains(itemBrand)) {
+                                      _selectedBrand = itemBrand;
+                                    }
+                                  }
+                                });
+                                Navigator.pop(sheetContext);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildImagePreview() {
@@ -641,6 +832,7 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
         if (widget.imageFile == null) {
           throw Exception('이미지 파일이 필요합니다.');
         }
+        // ISO 8601 형식 (시간대 정보 제거): yyyy-MM-ddTHH:mm:ss
         final takenAtIso = _takenAt != null
             ? DateFormat("yyyy-MM-ddTHH:mm:ss").format(_takenAt!)
             : null;
@@ -750,6 +942,11 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
                   labelText: widget.qrCode != null ? '위치 *' : '위치',
                   hintText: '예: 홍대 포토부스',
                   border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.search),
+                    tooltip: '포토부스 검색',
+                    onPressed: _openLocationSearchSheet,
+                  ),
                 ),
                 validator: widget.qrCode != null
                     ? (value) {
@@ -788,6 +985,8 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
                           _brandCtrl.text = value;
                         } else {
                           _brandCtrl.clear();
+                          // 직접 입력 선택 시 위치 필드도 비우기
+                          _locationCtrl.clear();
                         }
                       });
 

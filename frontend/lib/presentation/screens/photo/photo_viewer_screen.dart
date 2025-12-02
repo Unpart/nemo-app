@@ -367,6 +367,39 @@ class _PhotoViewerScreenState extends State<PhotoViewerScreen> {
                                       context.read<PhotoProvider>().removeById(
                                         widget.photoId,
                                       );
+
+                                      // 삭제된 사진이 썸네일인 앨범들을 찾아서 자동으로 썸네일 변경
+                                      if (widget.imageUrl.isNotEmpty) {
+                                        final albumProvider =
+                                            context.read<AlbumProvider>();
+                                        final albums = albumProvider.albums;
+                                        for (final album in albums) {
+                                          // 앨범의 썸네일 URL이 삭제된 사진의 imageUrl과 일치하는지 확인
+                                          if (album.coverPhotoUrl ==
+                                              widget.imageUrl) {
+                                            try {
+                                              // 자동으로 앨범 내 다른 사진으로 썸네일 변경
+                                              final res = await AlbumApi
+                                                  .setThumbnail(
+                                                albumId: album.albumId,
+                                                photoId:
+                                                    null, // null이면 자동으로 최신 사진 선택
+                                              );
+                                              // 썸네일 URL 업데이트
+                                              if (res['thumbnailUrl'] != null) {
+                                                albumProvider.updateCoverUrl(
+                                                  album.albumId,
+                                                  res['thumbnailUrl'] as String?,
+                                                );
+                                              }
+                                            } catch (e) {
+                                              debugPrint(
+                                                '⚠️ 앨범 썸네일 자동 변경 실패 (albumId: ${album.albumId}): $e',
+                                              );
+                                            }
+                                          }
+                                        }
+                                      }
                                     }
                                     Navigator.pop(context);
                                     ScaffoldMessenger.of(context).showSnackBar(
