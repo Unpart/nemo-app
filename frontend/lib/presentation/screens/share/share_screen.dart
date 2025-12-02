@@ -223,6 +223,19 @@ class _FriendsListSectionState extends State<_FriendsListSection> {
       final list = await FriendApi.getFriends();
       _friends = list;
       _applySort();
+    } catch (e) {
+      // 에러 발생 시 빈 목록으로 처리하여 앱이 크래시되지 않도록 함
+      print('❌ [ShareScreen] 친구 목록 로드 실패: $e');
+      _friends = [];
+      _filtered = [];
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('친구 목록을 불러오지 못했습니다: ${e.toString().replaceAll('Exception: ', '')}'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }

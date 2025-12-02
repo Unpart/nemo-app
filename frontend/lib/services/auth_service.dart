@@ -4,13 +4,12 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../app/constants.dart';
-import '../core/config/env.dart';
 import 'api_client.dart';
 
 class AuthService {
   // ✅ 서버 URL 설정 (로컬 or 배포 서버로 교체해야 함)
   static final String baseUrl =
-      "https://port-0-nemo-docker-springboot-prod-mdy7o3aya1eb5a01.sel5.cloudtype.app/"; // ← TODO: 실제 주소로 바꿔!
+      'https://port-0-nemo-docker-springboot-prod-mdy7o3aya1eb5a01.sel5.cloudtype.app/'; // ← TODO: 실제 주소로 바꿔!
 
   // JWT 토큰 저장소
   static String? _accessToken;
@@ -76,11 +75,19 @@ class AuthService {
       };
     }
     try {
+      // 디버그 로그 추가
+      print('🔵 [LOGIN] 시작 - baseUrl: $baseUrl');
+      print('🔵 [LOGIN] useMockApi: ${AppConstants.useMockApi}');
+      print('🔵 [LOGIN] 요청 URL: ${baseUrl}api/users/login');
+
       final response = await ApiClient.post(
         '/api/users/login',
         body: {'email': email, 'password': password},
         includeAuth: false,
       );
+
+      print('🟢 [LOGIN] 응답 상태: ${response.statusCode}');
+      print('🟢 [LOGIN] 응답 본문: ${response.body}');
 
       if (response.statusCode == 200) {
         // API 명세서: { accessToken, refreshToken, expiresIn, user: { userId, nickname, profileImageUrl } }
@@ -121,9 +128,25 @@ class AuthService {
         final data = jsonDecode(response.body);
         throw Exception(data['message'] ?? '잘못된 요청입니다.');
       } else {
+        print('🔴 [LOGIN] 실패 - 상태 코드: ${response.statusCode}');
+        print('🔴 [LOGIN] 응답 본문: ${response.body}');
         throw Exception('로그인 실패 (${response.statusCode})');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ [LOGIN] 에러 발생: $e');
+      print('❌ [LOGIN] 스택 트레이스: $stackTrace');
+      // 원본 에러 메시지를 더 자세히 전달
+      if (e.toString().contains('SocketException') ||
+          e.toString().contains('Failed host lookup') ||
+          e.toString().contains('Connection refused') ||
+          e.toString().contains('Network is unreachable')) {
+        throw Exception('서버에 연결할 수 없습니다. 인터넷 연결을 확인해주세요.');
+      } else if (e.toString().contains('HandshakeException') ||
+          e.toString().contains('Certificate')) {
+        throw Exception('SSL 인증서 오류가 발생했습니다.');
+      } else if (e.toString().contains('TimeoutException')) {
+        throw Exception('요청 시간이 초과되었습니다.');
+      }
       throw Exception('네트워크 오류: $e');
     }
   }

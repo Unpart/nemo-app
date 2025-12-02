@@ -323,6 +323,11 @@ class PhotoProvider extends ChangeNotifier {
           }
         }
       }
+    } catch (e) {
+      // 에러 발생 시 로그 출력하고 빈 목록으로 처리하여 앱이 크래시되지 않도록 함
+      debugPrint('❌ [PhotoProvider] loadNextPage 에러: $e');
+      _hasMore = false; // 더 이상 로드하지 않음
+      // 에러가 발생해도 빈 목록으로 표시하여 사용자가 앱을 계속 사용할 수 있도록 함
     } finally {
       _isLoading = false;
       notifyListeners();
