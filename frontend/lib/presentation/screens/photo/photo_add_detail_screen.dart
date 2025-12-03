@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -328,178 +329,30 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
   Future<void> _openLocationSearchSheet() async {
     if (!mounted) return;
 
-    String keyword = _locationCtrl.text.trim();
+    final initialKeyword = _locationCtrl.text.trim();
     final brand = _brandCtrl.text.trim();
 
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) {
-        List<Map<String, dynamic>> results = [];
-        bool loading = false;
-        String? error;
-
-        Future<void> search(
-          BuildContext sheetContext,
-          StateSetter setModalState,
-        ) async {
-          if (keyword.trim().isEmpty) return;
-          if (!sheetContext.mounted) return;
-          setModalState(() {
-            loading = true;
-            error = null;
+      builder: (ctx) => _LocationSearchSheet(
+        initialKeyword: initialKeyword,
+        brand: brand,
+        onLocationSelected: (name, road, itemBrand) {
+          setState(() {
+            _locationCtrl.text = road.isNotEmpty
+                ? '$name $road'.trim()
+                : (name.isNotEmpty ? name : road);
+            // 브랜드가 비어 있고 응답에 brand가 있으면 채우기
+            if (_brandCtrl.text.trim().isEmpty && itemBrand.isNotEmpty) {
+              _brandCtrl.text = itemBrand;
+              if (_brandOptions.contains(itemBrand)) {
+                _selectedBrand = itemBrand;
+              }
+            }
           });
-          try {
-            // 현재 위치 기준 넓은 뷰포트에서 브랜드 필터로 후보 포토부스를 가져온 뒤,
-            // 이름/주소에 사용자가 입력한 지역 키워드가 포함된 것만 필터링
-            LocationPermission permission = await Geolocator.checkPermission();
-            if (permission == LocationPermission.denied) {
-              permission = await Geolocator.requestPermission();
-            }
-            if (permission != LocationPermission.whileInUse &&
-                permission != LocationPermission.always) {
-              throw Exception('위치 권한이 필요합니다.');
-            }
-
-            final position = await Geolocator.getCurrentPosition(
-              desiredAccuracy: LocationAccuracy.high,
-              timeLimit: const Duration(seconds: 5),
-            );
-
-            const delta = 0.1; // 검색 범위 넓게 (약 수 km 반경)
-            final res = await MapApi.getViewport(
-              neLat: position.latitude + delta,
-              neLng: position.longitude + delta,
-              swLat: position.latitude - delta,
-              swLng: position.longitude - delta,
-              zoom: 13,
-              brand: brand.isNotEmpty ? brand : null,
-              limit: 200,
-              cluster: true,
-            );
-            if (!sheetContext.mounted) return;
-            final items = (res['items'] as List<dynamic>? ?? const [])
-                .where((item) {
-                  if (item is! Map) return false;
-                  if (item['cluster'] == true) return false;
-                  final name = (item['name'] as String? ?? '').toLowerCase();
-                  final road = (item['roadAddress'] as String? ?? '')
-                      .toLowerCase();
-                  final key = keyword.toLowerCase();
-                  return name.contains(key) || road.contains(key);
-                })
-                .cast<Map<String, dynamic>>()
-                .toList();
-
-            if (!sheetContext.mounted) return;
-            setModalState(() {
-              results = items;
-            });
-          } catch (e) {
-            if (!sheetContext.mounted) return;
-            setModalState(() {
-              error = e.toString();
-            });
-          } finally {
-            if (!sheetContext.mounted) return;
-            setModalState(() {
-              loading = false;
-            });
-          }
-        }
-
-        return StatefulBuilder(
-          builder: (sheetContext, setModalState) {
-            final controller = TextEditingController(text: keyword);
-            return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 16,
-                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextField(
-                      decoration: const InputDecoration(
-                        labelText: '지역 검색 (예: 홍대, 강남)',
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
-                      ),
-                      controller: controller,
-                      onChanged: (v) {
-                        keyword = v;
-                      },
-                      onSubmitted: (_) => search(sheetContext, setModalState),
-                    ),
-                    const SizedBox(height: 12),
-                    if (loading)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(16),
-                          child: CircularProgressIndicator(),
-                        ),
-                      )
-                    else if (error != null)
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Text(
-                          error!,
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      )
-                    else if (results.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text('검색 결과가 없습니다.'),
-                      )
-                    else
-                      Flexible(
-                        child: ListView.builder(
-                          shrinkWrap: true,
-                          itemCount: results.length,
-                          itemBuilder: (_, i) {
-                            final item = results[i];
-                            final name = item['name'] as String? ?? '';
-                            final road = item['roadAddress'] as String? ?? '';
-                            return ListTile(
-                              leading: const Icon(Icons.photo_camera_back),
-                              title: Text(name.isNotEmpty ? name : road),
-                              subtitle: road.isNotEmpty && name.isNotEmpty
-                                  ? Text(road)
-                                  : null,
-                              onTap: () {
-                                setState(() {
-                                  _locationCtrl.text = road.isNotEmpty
-                                      ? '$name $road'.trim()
-                                      : (name.isNotEmpty ? name : road);
-                                  // 브랜드가 비어 있고 응답에 brand가 있으면 채우기
-                                  final itemBrand =
-                                      item['brand'] as String? ?? '';
-                                  if (_brandCtrl.text.trim().isEmpty &&
-                                      itemBrand.isNotEmpty) {
-                                    _brandCtrl.text = itemBrand;
-                                    if (_brandOptions.contains(itemBrand)) {
-                                      _selectedBrand = itemBrand;
-                                    }
-                                  }
-                                });
-                                Navigator.pop(sheetContext);
-                              },
-                            );
-                          },
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+        },
+      ),
     );
   }
 
@@ -1162,6 +1015,208 @@ class _PhotoAddDetailScreenState extends State<PhotoAddDetailScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LocationSearchSheet extends StatefulWidget {
+  final String initialKeyword;
+  final String brand;
+  final Function(String name, String road, String itemBrand) onLocationSelected;
+
+  const _LocationSearchSheet({
+    required this.initialKeyword,
+    required this.brand,
+    required this.onLocationSelected,
+  });
+
+  @override
+  State<_LocationSearchSheet> createState() => _LocationSearchSheetState();
+}
+
+class _LocationSearchSheetState extends State<_LocationSearchSheet> {
+  late TextEditingController _controller;
+  List<Map<String, dynamic>> _results = [];
+  bool _loading = false;
+  String? _error;
+  Timer? _debounceTimer;
+  String _keyword = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _keyword = widget.initialKeyword;
+    _controller = TextEditingController(text: widget.initialKeyword);
+    // 초기 로드 시 검색 실행 (검색어가 있으면)
+    if (_keyword.trim().isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _search();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounceTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search() async {
+    if (_keyword.trim().isEmpty) return;
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      // 현재 위치 가져오기 (선택적 - 거리 정렬을 위해)
+      Position? position;
+      try {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission == LocationPermission.whileInUse ||
+            permission == LocationPermission.always) {
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+            timeLimit: const Duration(seconds: 5),
+          );
+        }
+      } catch (_) {
+        // 위치 권한이 없어도 검색은 가능 (거리 정렬만 안 됨)
+      }
+
+      // 새로운 자동완성 검색 API 사용
+      final items = await MapApi.searchPhotobooths(
+        keyword: _keyword,
+        lat: position?.latitude,
+        lng: position?.longitude,
+        limit: 20,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _results = items;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              decoration: InputDecoration(
+                labelText: '지역 검색 (예: 홍대, 강남)',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.search),
+                  onPressed: _search,
+                  tooltip: '검색',
+                ),
+                border: const OutlineInputBorder(),
+              ),
+              controller: _controller,
+              onChanged: (v) {
+                _keyword = v;
+                // 디바운스: 500ms 후 자동 검색
+                _debounceTimer?.cancel();
+                _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+                  if (_keyword.trim().isNotEmpty) {
+                    _search();
+                  }
+                });
+              },
+              onSubmitted: (_) => _search(),
+            ),
+            const SizedBox(height: 12),
+            if (_loading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_error != null)
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Text(_error!, style: const TextStyle(color: Colors.red)),
+              )
+            else if (_results.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text('검색 결과가 없습니다.'),
+              )
+            else
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _results.length,
+                  itemBuilder: (_, i) {
+                    final item = _results[i];
+                    final name = item['name'] as String? ?? '';
+                    final road = item['roadAddress'] as String? ?? '';
+                    final address = item['address'] as String? ?? '';
+                    final itemBrand = item['brand'] as String? ?? '';
+                    final distanceMeter = item['distanceMeter'] as int?;
+                    return ListTile(
+                      leading: const Icon(Icons.photo_camera_back),
+                      title: Text(
+                        name.isNotEmpty
+                            ? name
+                            : (road.isNotEmpty ? road : address),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (road.isNotEmpty && name.isNotEmpty) Text(road),
+                          if (distanceMeter != null)
+                            Text(
+                              '${distanceMeter}m',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                        ],
+                      ),
+                      onTap: () {
+                        widget.onLocationSelected(
+                          name,
+                          road.isNotEmpty ? road : address,
+                          itemBrand,
+                        );
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     );
