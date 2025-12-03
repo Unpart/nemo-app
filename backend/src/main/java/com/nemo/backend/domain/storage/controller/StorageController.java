@@ -35,7 +35,7 @@ public class StorageController {
         Long userId = authExtractor.extractUserId(authorization);
 
         // 2️⃣ 서비스에서 계산
-        StorageQuotaResponse quota = storageService.getQuota(userId);
+        StorageQuotaResponse quota = storageService.getStorageQuota(userId);
 
         // 3️⃣ 그대로 응답
         return ResponseEntity

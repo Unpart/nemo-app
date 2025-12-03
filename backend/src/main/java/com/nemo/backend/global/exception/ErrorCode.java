@@ -73,7 +73,10 @@ public enum ErrorCode {
 
 
     // 캘린더 타임라인 코드
-    INVALID_QUERY(HttpStatus.BAD_REQUEST, "INVALID_QUERY", "year와 month 파라미터는 필수입니다.");
+    INVALID_QUERY(HttpStatus.BAD_REQUEST, "INVALID_QUERY", "year와 month 파라미터는 필수입니다."),
+    // 구독/결제
+    INVALID_SUBSCRIPTION_TOKEN(HttpStatus.BAD_REQUEST, "INVALID_SUBSCRIPTION_TOKEN", "유효하지 않은 구독 정보입니다."),
+    SUBSCRIPTION_REQUIRED(HttpStatus.FORBIDDEN, "SUBSCRIPTION_REQUIRED", "이 기능을 사용하려면 구독이 필요합니다.");
 
     private final HttpStatus status;
     private final String code;
