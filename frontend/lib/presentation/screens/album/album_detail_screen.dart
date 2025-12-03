@@ -908,6 +908,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
     final showDelete = isOwner;
     // 멤버 조회: 실제로 공유된 앨범에서만 노출 (shared == true)
     final showMembers = isAlbumShared;
+    // 앨범 나가기: OWNER가 아닌 공유 앨범 멤버만 가능
+    final showLeave = isAlbumShared && !isOwner;
     return Row(
       children: [
         IconButton(
@@ -990,6 +992,59 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
                   await _loadMyRole();
                 }
                 break;
+              case 'leave':
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('앨범 나가기'),
+                    content: const Text('정말 추억을 접어두시겠습니까?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('취소'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('나가기'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  try {
+                    final currentUserId = context.read<UserProvider>().userId;
+                    if (currentUserId == null) {
+                      throw Exception('사용자 정보를 찾을 수 없습니다.');
+                    }
+                    await AlbumApi.removeShareMember(
+                      albumId: widget.albumId,
+                      targetUserId: currentUserId,
+                    );
+                    if (!mounted) return;
+                    // 앨범 목록에서 제거
+                    context.read<AlbumProvider>().removeAlbum(widget.albumId);
+                    // 앨범 상세 화면 닫고 이전 화면으로
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('앨범에서 나갔습니다.')),
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    final errorMsg = e.toString();
+                    String message;
+                    if (errorMsg.contains('CANNOT_REMOVE_OWNER')) {
+                      message = '소유자는 앨범에서 나갈 수 없습니다.';
+                    } else if (errorMsg.contains('FORBIDDEN')) {
+                      message = '권한이 없습니다.';
+                    } else {
+                      message = '나가기 실패: $e';
+                    }
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(message)));
+                  }
+                }
+                break;
               case 'delete':
                 final ok = await showDialog<bool>(
                   context: context,
@@ -1054,6 +1109,8 @@ class _AlbumDetailScreenState extends State<AlbumDetailScreen> {
             const PopupMenuItem(value: 'download_all', child: Text('전체 다운로드')),
             if (showMembers)
               const PopupMenuItem(value: 'members', child: Text('멤버 조회')),
+            if (showLeave)
+              const PopupMenuItem(value: 'leave', child: Text('앨범 나가기')),
             if (showDelete)
               const PopupMenuItem(value: 'delete', child: Text('앨범 삭제')),
           ],

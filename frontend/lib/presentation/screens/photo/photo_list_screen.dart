@@ -784,7 +784,24 @@ class _EmptyState extends StatelessWidget {
         children: const [
           Icon(Icons.photo_library_outlined, size: 48, color: Colors.grey),
           SizedBox(height: 8),
-          Text('아직 업로드된 사진이 없습니다'),
+          Text('추억 한 장을 남겨보세요.'),
+        ],
+      ),
+    );
+  }
+}
+
+class _AlbumEmptyState extends StatelessWidget {
+  const _AlbumEmptyState();
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          Icon(Icons.photo_album_outlined, size: 48, color: Colors.grey),
+          SizedBox(height: 8),
+          Text('추억을 담아보세요.'),
         ],
       ),
     );
@@ -1453,344 +1470,362 @@ class _AlbumListGridState extends State<_AlbumListGrid> {
       onRefresh: () async {
         await _loadAlbums(reset: true);
       },
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (n) {
-          // 스크롤 업데이트 중에만 처리 (스크롤 종료 시 충돌 방지)
-          if (n is ScrollUpdateNotification) {
-            if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
-              if (!_isLoading && _hasMore) {
-                _loadAlbums();
-              }
-            }
-          }
-          return false;
-        },
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 20,
-            crossAxisSpacing: 20,
-            childAspectRatio: 0.78,
-          ),
-          itemCount: _albums.length,
-          itemBuilder: (_, i) {
-            final a = _albums[i];
-            final albumId = a['albumId'] as int;
-            final title = (a['title'] ?? '') as String;
-            final photoCount = (a['photoCount'] as int?) ?? 0;
-            final scale = _pressedIndex == i ? 0.96 : 1.0;
+      child: _albums.isEmpty && !_isLoading
+          ? const _AlbumEmptyState()
+          : NotificationListener<ScrollNotification>(
+              onNotification: (n) {
+                // 스크롤 업데이트 중에만 처리 (스크롤 종료 시 충돌 방지)
+                if (n is ScrollUpdateNotification) {
+                  if (n.metrics.pixels >= n.metrics.maxScrollExtent - 200) {
+                    if (!_isLoading && _hasMore) {
+                      _loadAlbums();
+                    }
+                  }
+                }
+                return false;
+              },
+              child: GridView.builder(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 20,
+                  crossAxisSpacing: 20,
+                  childAspectRatio: 0.78,
+                ),
+                itemCount: _albums.length,
+                itemBuilder: (_, i) {
+                  final a = _albums[i];
+                  final albumId = a['albumId'] as int;
+                  final title = (a['title'] ?? '') as String;
+                  final photoCount = (a['photoCount'] as int?) ?? 0;
+                  final scale = _pressedIndex == i ? 0.96 : 1.0;
 
-            // AlbumProvider에서 즐겨찾기, 공유 상태, 썸네일 가져오기
-            // 썸네일 변경 시 즉시 반영을 위해 context.watch 사용
-            // (스크롤 종료 시 충돌 방지를 위해 ScrollUpdateNotification만 처리)
-            final albumProvider = context.watch<AlbumProvider>();
-            final albumItem = albumProvider.byId(albumId);
-            // AlbumProvider의 썸네일을 우선 사용, 없으면 API 응답 값 사용
-            final coverPhotoUrl =
-                albumItem?.coverPhotoUrl ?? (a['coverPhotoUrl'] as String?);
-            final isFavorited =
-                albumProvider.isFavorited(albumId) ||
-                (a['favorited'] as bool?) == true;
-            // 공유 표시: 실제로 공유된 앨범인지 확인 (권한이 아닌 공유 여부로 판단)
-            final isShared = albumProvider.isShared(albumId);
+                  // AlbumProvider에서 즐겨찾기, 공유 상태, 썸네일 가져오기
+                  // 썸네일 변경 시 즉시 반영을 위해 context.watch 사용
+                  // (스크롤 종료 시 충돌 방지를 위해 ScrollUpdateNotification만 처리)
+                  final albumProvider = context.watch<AlbumProvider>();
+                  final albumItem = albumProvider.byId(albumId);
+                  // AlbumProvider의 썸네일을 우선 사용, 없으면 API 응답 값 사용
+                  final coverPhotoUrl =
+                      albumItem?.coverPhotoUrl ??
+                      (a['coverPhotoUrl'] as String?);
+                  final isFavorited =
+                      albumProvider.isFavorited(albumId) ||
+                      (a['favorited'] as bool?) == true;
+                  // 공유 표시: 실제로 공유된 앨범인지 확인 (권한이 아닌 공유 여부로 판단)
+                  final isShared = albumProvider.isShared(albumId);
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: AnimatedScale(
-                    scale: scale,
-                    duration: const Duration(milliseconds: 120),
-                    curve: Curves.easeOut,
-                    child: Material(
-                      elevation: 2,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  AlbumDetailScreen(albumId: albumId),
-                            ),
-                          );
-                        },
-                        onLongPress: () async {
-                          setState(() => _pressedIndex = i);
-                          await Future.delayed(
-                            const Duration(milliseconds: 90),
-                          );
-                          final action = await showModalBottomSheet<String>(
-                            context: context,
-                            backgroundColor: Colors.transparent,
-                            builder: (ctx) => _AlbumQuickActions(album: a),
-                          );
-                          if (!mounted) return;
-                          setState(() => _pressedIndex = null);
-                          if (action == null) return;
-                          if (action == 'share') {
-                            // AlbumDetailScreen으로 이동하지 않고 바로 공유 시트 표시
-                            await _showAlbumShareSheet(context, albumId);
-                          } else if (action == 'download') {
-                            try {
-                              final count =
-                                  await PhotoDownloadService.downloadAlbumToGallery(
-                                    albumId,
-                                  );
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    count > 0
-                                        ? '$count장의 사진을 갤러리에 저장했어요.'
-                                        : '다운로드 가능한 사진이 없습니다.',
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: AnimatedScale(
+                          scale: scale,
+                          duration: const Duration(milliseconds: 120),
+                          curve: Curves.easeOut,
+                          child: Material(
+                            elevation: 2,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        AlbumDetailScreen(albumId: albumId),
                                   ),
-                                ),
-                              );
-                            } catch (e) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('다운로드 중 오류: $e')),
-                              );
-                            }
-                          } else if (action == 'fav') {
-                            try {
-                              await AlbumApi.favoriteAlbum(albumId);
-                              if (!mounted) return;
-                              // AlbumProvider 즉시 업데이트하여 UI에 바로 반영
-                              context.read<AlbumProvider>().setFavorite(
-                                albumId,
-                                true,
-                              );
-                              setState(() {
-                                final idx = _albums.indexWhere(
-                                  (e) => e['albumId'] == albumId,
                                 );
-                                if (idx != -1) {
-                                  _albums[idx] = {
-                                    ..._albums[idx],
-                                    'favorited': true,
-                                  };
-                                }
-                              });
-                            } catch (e) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('즐겨찾기 추가 실패: $e')),
-                              );
-                            }
-                          } else if (action == 'unfav') {
-                            try {
-                              await AlbumApi.unfavoriteAlbum(albumId);
-                              if (!mounted) return;
-                              // AlbumProvider 즉시 업데이트하여 UI에 바로 반영
-                              context.read<AlbumProvider>().setFavorite(
-                                albumId,
-                                false,
-                              );
-                              setState(() {
-                                final idx = _albums.indexWhere(
-                                  (e) => e['albumId'] == albumId,
+                              },
+                              onLongPress: () async {
+                                setState(() => _pressedIndex = i);
+                                await Future.delayed(
+                                  const Duration(milliseconds: 90),
                                 );
-                                if (idx != -1) {
-                                  _albums[idx] = {
-                                    ..._albums[idx],
-                                    'favorited': false,
-                                  };
-                                }
-                              });
-                            } catch (e) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('즐겨찾기 해제 실패: $e')),
-                              );
-                            }
-                          } else if (action == 'edit') {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => AlbumDetailScreen(
-                                  albumId: albumId,
-                                  autoOpenAction: action,
-                                ),
-                              ),
-                            );
-                          } else if (action == 'delete') {
-                            final ok = await showDialog<bool>(
-                              context: context,
-                              builder: (_) => AlertDialog(
-                                title: const Text('앨범 삭제'),
-                                content: const Text('이 앨범을 삭제하시겠습니까?'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('취소'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    child: const Text('삭제'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (ok == true) {
-                              try {
-                                await AlbumApi.deleteAlbum(albumId);
+                                final action =
+                                    await showModalBottomSheet<String>(
+                                      context: context,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (ctx) =>
+                                          _AlbumQuickActions(album: a),
+                                    );
                                 if (!mounted) return;
-
-                                // AlbumProvider에서도 제거
-                                context.read<AlbumProvider>().removeAlbum(
-                                  albumId,
-                                );
-
-                                // 로컬 리스트에서 제거
-                                setState(() {
-                                  _albums.removeWhere(
-                                    (e) => e['albumId'] == albumId,
-                                  );
-                                });
-
-                                // 전체 목록 새로고침 (서버에서 최신 데이터 가져오기)
-                                // 앨범이 하나 남았을 때도 제대로 새로고침되도록 강제 실행
-                                WidgetsBinding.instance.addPostFrameCallback((
-                                  _,
-                                ) {
-                                  if (mounted) {
-                                    // 로딩 중이면 잠시 대기 후 다시 시도
-                                    if (_isLoading) {
-                                      Future.delayed(
-                                        const Duration(milliseconds: 200),
-                                        () {
-                                          if (mounted) {
-                                            _loadAlbums(reset: true);
-                                          }
-                                        },
+                                setState(() => _pressedIndex = null);
+                                if (action == null) return;
+                                if (action == 'share') {
+                                  // AlbumDetailScreen으로 이동하지 않고 바로 공유 시트 표시
+                                  await _showAlbumShareSheet(context, albumId);
+                                } else if (action == 'download') {
+                                  try {
+                                    final count =
+                                        await PhotoDownloadService.downloadAlbumToGallery(
+                                          albumId,
+                                        );
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          count > 0
+                                              ? '$count장의 사진을 갤러리에 저장했어요.'
+                                              : '다운로드 가능한 사진이 없습니다.',
+                                        ),
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('다운로드 중 오류: $e')),
+                                    );
+                                  }
+                                } else if (action == 'fav') {
+                                  try {
+                                    await AlbumApi.favoriteAlbum(albumId);
+                                    if (!mounted) return;
+                                    // AlbumProvider 즉시 업데이트하여 UI에 바로 반영
+                                    context.read<AlbumProvider>().setFavorite(
+                                      albumId,
+                                      true,
+                                    );
+                                    setState(() {
+                                      final idx = _albums.indexWhere(
+                                        (e) => e['albumId'] == albumId,
                                       );
-                                    } else {
-                                      _loadAlbums(reset: true);
+                                      if (idx != -1) {
+                                        _albums[idx] = {
+                                          ..._albums[idx],
+                                          'favorited': true,
+                                        };
+                                      }
+                                    });
+                                  } catch (e) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('즐겨찾기 추가 실패: $e')),
+                                    );
+                                  }
+                                } else if (action == 'unfav') {
+                                  try {
+                                    await AlbumApi.unfavoriteAlbum(albumId);
+                                    if (!mounted) return;
+                                    // AlbumProvider 즉시 업데이트하여 UI에 바로 반영
+                                    context.read<AlbumProvider>().setFavorite(
+                                      albumId,
+                                      false,
+                                    );
+                                    setState(() {
+                                      final idx = _albums.indexWhere(
+                                        (e) => e['albumId'] == albumId,
+                                      );
+                                      if (idx != -1) {
+                                        _albums[idx] = {
+                                          ..._albums[idx],
+                                          'favorited': false,
+                                        };
+                                      }
+                                    });
+                                  } catch (e) {
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('즐겨찾기 해제 실패: $e')),
+                                    );
+                                  }
+                                } else if (action == 'edit') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => AlbumDetailScreen(
+                                        albumId: albumId,
+                                        autoOpenAction: action,
+                                      ),
+                                    ),
+                                  );
+                                } else if (action == 'delete') {
+                                  final ok = await showDialog<bool>(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                      title: const Text('앨범 삭제'),
+                                      content: const Text('이 앨범을 삭제하시겠습니까?'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context, false),
+                                          child: const Text('취소'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context, true),
+                                          child: const Text('삭제'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (ok == true) {
+                                    try {
+                                      await AlbumApi.deleteAlbum(albumId);
+                                      if (!mounted) return;
+
+                                      // AlbumProvider에서도 제거
+                                      context.read<AlbumProvider>().removeAlbum(
+                                        albumId,
+                                      );
+
+                                      // 로컬 리스트에서 제거
+                                      setState(() {
+                                        _albums.removeWhere(
+                                          (e) => e['albumId'] == albumId,
+                                        );
+                                      });
+
+                                      // 전체 목록 새로고침 (서버에서 최신 데이터 가져오기)
+                                      // 앨범이 하나 남았을 때도 제대로 새로고침되도록 강제 실행
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                            if (mounted) {
+                                              // 로딩 중이면 잠시 대기 후 다시 시도
+                                              if (_isLoading) {
+                                                Future.delayed(
+                                                  const Duration(
+                                                    milliseconds: 200,
+                                                  ),
+                                                  () {
+                                                    if (mounted) {
+                                                      _loadAlbums(reset: true);
+                                                    }
+                                                  },
+                                                );
+                                              } else {
+                                                _loadAlbums(reset: true);
+                                              }
+                                            }
+                                          });
+
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('앨범이 삭제되었습니다.'),
+                                        ),
+                                      );
+                                    } catch (e) {
+                                      if (!mounted) return;
+                                      final errorMsg = e.toString();
+                                      String message;
+                                      if (errorMsg.contains('409') ||
+                                          errorMsg.contains('CONSTRAINT') ||
+                                          errorMsg.contains('제약 조건') ||
+                                          errorMsg.contains('연결된 데이터') ||
+                                          errorMsg.contains('중복 데이터')) {
+                                        message =
+                                            '앨범을 삭제할 수 없습니다. 앨범에 연결된 데이터가 있어 삭제할 수 없습니다.';
+                                      } else if (errorMsg.contains(
+                                            'FORBIDDEN',
+                                          ) ||
+                                          errorMsg.contains('권한이 없습니다') ||
+                                          errorMsg.contains('삭제할 권한') ||
+                                          errorMsg.contains('공유받은 앨범')) {
+                                        message = '공유받은 앨범은 삭제할 수 없습니다.';
+                                      } else if (errorMsg.contains(
+                                        'ALBUM_NOT_FOUND',
+                                      )) {
+                                        message = '앨범을 찾을 수 없습니다.';
+                                      } else {
+                                        message = '삭제 실패: $e';
+                                      }
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(content: Text(message)),
+                                      );
                                     }
                                   }
-                                });
-
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('앨범이 삭제되었습니다.')),
-                                );
-                              } catch (e) {
-                                if (!mounted) return;
-                                final errorMsg = e.toString();
-                                String message;
-                                if (errorMsg.contains('409') ||
-                                    errorMsg.contains('CONSTRAINT') ||
-                                    errorMsg.contains('제약 조건') ||
-                                    errorMsg.contains('연결된 데이터') ||
-                                    errorMsg.contains('중복 데이터')) {
-                                  message =
-                                      '앨범을 삭제할 수 없습니다. 앨범에 연결된 데이터가 있어 삭제할 수 없습니다.';
-                                } else if (errorMsg.contains('FORBIDDEN') ||
-                                    errorMsg.contains('권한이 없습니다') ||
-                                    errorMsg.contains('삭제할 권한') ||
-                                    errorMsg.contains('공유받은 앨범')) {
-                                  message = '공유받은 앨범은 삭제할 수 없습니다.';
-                                } else if (errorMsg.contains(
-                                  'ALBUM_NOT_FOUND',
-                                )) {
-                                  message = '앨범을 찾을 수 없습니다.';
-                                } else {
-                                  message = '삭제 실패: $e';
                                 }
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(message)),
-                                );
-                              }
-                            }
-                          }
-                        },
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Stack(
-                            children: [
-                              Positioned.fill(
-                                child: coverPhotoUrl != null
-                                    ? Image.network(
-                                        coverPhotoUrl,
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) =>
-                                            const ColoredBox(
-                                              color: Color(0xFFE0E0E0),
+                              },
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Stack(
+                                  children: [
+                                    Positioned.fill(
+                                      child: coverPhotoUrl != null
+                                          ? Image.network(
+                                              coverPhotoUrl,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  const ColoredBox(
+                                                    color: Color(0xFFE0E0E0),
+                                                  ),
+                                            )
+                                          : Container(
+                                              color: const Color(0xFFE0E0E0),
+                                              child: Center(
+                                                child: Icon(
+                                                  Icons.favorite,
+                                                  size: 100, // 하트 크기 살짝 키움
+                                                  color: Colors
+                                                      .lightBlueAccent
+                                                      .shade200,
+                                                ),
+                                              ),
                                             ),
-                                      )
-                                    : Container(
-                                        color: const Color(0xFFE0E0E0),
-                                        child: Center(
-                                          child: Icon(
-                                            Icons.favorite,
-                                            size: 100, // 하트 크기 살짝 키움
-                                            color:
-                                                Colors.lightBlueAccent.shade200,
+                                    ),
+                                    // 즐겨찾기 표시 - AlbumProvider 상태 사용
+                                    if (isFavorited)
+                                      const Positioned(
+                                        right: 6,
+                                        top: 6,
+                                        child: _FavoriteBadge(),
+                                      ),
+                                    // 공유 표시 - AlbumProvider 상태 사용 (소유자가 공유한 앨범도 포함)
+                                    if (isShared)
+                                      const Positioned(
+                                        left: 6,
+                                        top: 6,
+                                        child: _ShareBadge(),
+                                      ),
+                                    Positioned(
+                                      left: 0,
+                                      right: 0,
+                                      bottom: 0,
+                                      height: 56,
+                                      child: Container(
+                                        decoration: const BoxDecoration(
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topCenter,
+                                            end: Alignment.bottomCenter,
+                                            colors: [
+                                              Colors.transparent,
+                                              Colors.black26,
+                                            ],
                                           ),
                                         ),
                                       ),
-                              ),
-                              // 즐겨찾기 표시 - AlbumProvider 상태 사용
-                              if (isFavorited)
-                                const Positioned(
-                                  right: 6,
-                                  top: 6,
-                                  child: _FavoriteBadge(),
-                                ),
-                              // 공유 표시 - AlbumProvider 상태 사용 (소유자가 공유한 앨범도 포함)
-                              if (isShared)
-                                const Positioned(
-                                  left: 6,
-                                  top: 6,
-                                  child: _ShareBadge(),
-                                ),
-                              Positioned(
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                height: 56,
-                                child: Container(
-                                  decoration: const BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.transparent,
-                                        Colors.black26,
-                                      ],
                                     ),
-                                  ),
+                                  ],
                                 ),
                               ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  '${photoCount}장',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.black54, fontSize: 12),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        '${photoCount}장',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Colors.black54,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
     );
   }
 
