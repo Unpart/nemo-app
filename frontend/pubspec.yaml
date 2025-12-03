@@ -50,6 +50,7 @@ dependencies:
   pdfx: ^2.9.2
   path_provider: ^2.1.1
   image_gallery_saver_plus: ^4.0.1
+  flutter_exif_rotation: ^0.5.1
 
 dev_dependencies:
   flutter_test:

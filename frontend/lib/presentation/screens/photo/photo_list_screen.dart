@@ -12,6 +12,7 @@ import 'package:frontend/presentation/screens/album/album_detail_screen.dart';
 import 'package:frontend/services/album_api.dart';
 import 'package:frontend/services/friend_api.dart';
 import 'package:frontend/app/theme/app_colors.dart';
+import 'package:flutter_exif_rotation/flutter_exif_rotation.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:frontend/presentation/screens/photo/photo_add_detail_screen.dart';
@@ -63,7 +64,11 @@ class _PhotoListScreenState extends State<PhotoListScreen> {
         imageQuality: 85,
       );
       if (image != null && mounted) {
-        final file = File(image.path);
+        // EXIF 회전 정보를 반영해 실제 이미지를 세로 방향으로 보정
+        final rotatedFile = await FlutterExifRotation.rotateImage(
+          path: image.path,
+        );
+        final file = File(rotatedFile.path);
         // PhotoAddDetailScreen으로 이동 (qrCode: null)
         final success = await Navigator.push<bool>(
           context,
