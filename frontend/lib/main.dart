@@ -11,6 +11,7 @@ import 'presentation/screens/main_shell.dart';
 import 'providers/user_provider.dart';
 import 'providers/provider.dart';
 import 'package:provider/provider.dart';
+import 'widgets/auth_guard.dart';
 
 void main() async {
   // 플러그인 초기화를 보장 (camera 등)
@@ -131,7 +132,9 @@ class _RootGateState extends State<_RootGate> {
         ),
       );
     }
-    return _loggedIn ? const MainShell() : const LoginScreen();
+    return _loggedIn
+        ? const AuthGuard(child: MainShell())
+        : const LoginScreen();
   }
 }
 
