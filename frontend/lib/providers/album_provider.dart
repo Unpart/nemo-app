@@ -170,7 +170,7 @@ class AlbumProvider extends ChangeNotifier {
         photoIdList: photoIdList,
       );
       if (!silent) {
-        notifyListeners();
+      notifyListeners();
       }
       return;
     }
@@ -189,7 +189,7 @@ class AlbumProvider extends ChangeNotifier {
     // silent 모드면 notifyListeners를 호출하지 않음
     // (화면 전환 애니메이션 중 충돌 방지)
     if (!silent) {
-      notifyListeners();
+    notifyListeners();
     }
   }
 

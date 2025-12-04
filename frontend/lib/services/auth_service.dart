@@ -5,6 +5,23 @@ import 'package:http/http.dart' as http;
 
 import '../app/constants.dart';
 import 'api_client.dart';
+import 'auth_storage.dart';
+
+class AutoLoginResult {
+  final bool success;
+  final int? userId;
+  final String? nickname;
+  final String? profileImageUrl;
+  final String? accessToken;
+
+  AutoLoginResult({
+    required this.success,
+    this.userId,
+    this.nickname,
+    this.profileImageUrl,
+    this.accessToken,
+  });
+}
 
 class AuthService {
   // ✅ 서버 URL 설정 (health 체크 기반 원격/로컬 자동 선택)
@@ -26,7 +43,8 @@ class AuthService {
     // 1) 원격 서버 health 체크 시도
     try {
       final uri = Uri.parse('${_remoteBaseUrl}actuator/health');
-      final res = await http.get(uri).timeout(const Duration(seconds: 2));
+      // 모바일 네트워크 환경에서도 여유를 두기 위해 타임아웃을 5초로 증가
+      final res = await http.get(uri).timeout(const Duration(seconds: 5));
 
       if (res.statusCode >= 200 && res.statusCode < 400) {
         _resolvedBaseUrl = _remoteBaseUrl;
@@ -67,6 +85,66 @@ class AuthService {
   static void clearAccessToken() {
     _accessToken = null;
     _refreshToken = null;
+  }
+
+  /// 앱 시작 시 로컬에 저장된 refreshToken을 사용해 자동 로그인 시도
+  /// - 성공 시: accessToken 갱신 + (필요하면 refreshToken 갱신)
+  /// - 실패 시: 저장값 삭제
+  static Future<AutoLoginResult> tryAutoLogin() async {
+    try {
+      final stored = await AuthStorage.loadAuth();
+      if (stored == null) {
+        return AutoLoginResult(success: false);
+      }
+
+      // 서버에 refresh 토큰 검증 + accessToken 발급 요청
+      final refreshRes = await ApiClient.post(
+        '/api/auth/refresh',
+        body: {'refreshToken': stored.refreshToken},
+        includeAuth: false,
+      );
+
+      if (refreshRes.statusCode != 200) {
+        await AuthStorage.clear();
+        return AutoLoginResult(success: false);
+      }
+
+      final data =
+          jsonDecode(utf8.decode(refreshRes.bodyBytes)) as Map<String, dynamic>;
+      final newAccess = data['accessToken'] as String?;
+      final newRefresh = data['refreshToken'] as String?;
+
+      if (newAccess == null || newAccess.isEmpty) {
+        await AuthStorage.clear();
+        return AutoLoginResult(success: false);
+      }
+
+      // 메모리에 토큰 반영
+      setAccessToken(newAccess);
+      if (newRefresh != null && newRefresh.isNotEmpty) {
+        setRefreshToken(newRefresh);
+        await AuthStorage.saveAuth(
+          userId: stored.userId,
+          nickname: stored.nickname,
+          profileImageUrl: stored.profileImageUrl,
+          refreshToken: newRefresh,
+        );
+      } else {
+        // refreshToken 변경 없으면 기존 값 유지
+        _refreshToken = stored.refreshToken;
+      }
+
+      return AutoLoginResult(
+        success: true,
+        userId: stored.userId,
+        nickname: stored.nickname,
+        profileImageUrl: stored.profileImageUrl,
+        accessToken: newAccess,
+      );
+    } catch (_) {
+      await AuthStorage.clear();
+      return AutoLoginResult(success: false);
+    }
   }
 
   // JWT 토큰이 포함된 헤더 생성
@@ -133,10 +211,22 @@ class AuthService {
         final refresh = data['refreshToken'] as String?;
         final user = data['user'] as Map<String, dynamic>?;
 
-        // Access Token과 Refresh Token 저장
+        // Access Token과 Refresh Token 저장 + 로컬 저장
         setAccessToken(access);
         if (refresh != null) {
           setRefreshToken(refresh);
+          final uid = (user?['userId'] as num?)?.toInt();
+          final nickname = user?['nickname'] as String? ?? '';
+          final profileImageUrl = user?['profileImageUrl'] as String?;
+          if (uid != null) {
+            // 실패해도 로그인 자체에는 영향 없도록 await 사용
+            await AuthStorage.saveAuth(
+              userId: uid,
+              nickname: nickname,
+              profileImageUrl: profileImageUrl,
+              refreshToken: refresh,
+            );
+          }
         }
 
         return {

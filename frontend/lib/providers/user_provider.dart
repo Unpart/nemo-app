@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../services/auth_storage.dart';
 import 'photo_provider.dart';
 import 'album_provider.dart';
 
@@ -42,8 +43,9 @@ class UserProvider extends ChangeNotifier {
     profileImageUrl = null;
     accessToken = null;
 
-    // AuthService에서도 토큰 제거
+    // AuthService에서도 토큰 제거 + 로컬 저장 삭제
     AuthService.clearAccessToken();
+    AuthStorage.clear();
 
     notifyListeners();
 
