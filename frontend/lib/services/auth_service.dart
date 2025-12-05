@@ -23,6 +23,22 @@ class AutoLoginResult {
   });
 }
 
+/// 계정 잠금 예외 (비밀번호 재설정 필요)
+class AccountLockedException implements Exception {
+  final String message;
+  final int? remainingAttempts;
+  final String? email;
+
+  AccountLockedException({
+    required this.message,
+    this.remainingAttempts,
+    this.email,
+  });
+
+  @override
+  String toString() => message;
+}
+
 class AuthService {
   // ✅ 서버 URL 설정 (health 체크 기반 원격/로컬 자동 선택)
   static String? _resolvedBaseUrl;
@@ -239,7 +255,7 @@ class AuthService {
           'profileImageUrl': user?['profileImageUrl'],
         };
       } else if (response.statusCode == 401) {
-        // 백엔드 명세: { "error": "INVALID_CREDENTIALS", "message": "이메일 또는 비밀번호가 올바르지 않습니다." }
+        // 백엔드 명세: { "error": "INVALID_CREDENTIALS", "message": "...", "remainingAttempts": 3, "needCaptcha": false, "needPasswordReset": false }
         final raw = response.body.isNotEmpty
             ? utf8.decode(response.bodyBytes)
             : '';
@@ -253,12 +269,32 @@ class AuthService {
         }
         final error = data?['error'] as String?;
         final message = data?['message'] as String?;
+        final remainingAttempts = data?['remainingAttempts'] as int?;
+        final needPasswordReset = data?['needPasswordReset'] as bool? ?? false;
+
+        // 계정 잠금 또는 비밀번호 재설정 필요
+        if (error == 'ACCOUNT_LOCKED' || needPasswordReset == true) {
+          throw AccountLockedException(
+            message: message?.isNotEmpty == true
+                ? message!
+                : '비밀번호를 여러 번 틀려 계정이 잠겼습니다. 비밀번호를 재설정해주세요.',
+            remainingAttempts: remainingAttempts,
+            email: email, // 로그인 시도한 이메일 전달
+          );
+        }
 
         if (error == 'INVALID_CREDENTIALS') {
           // 잘못된 이메일/비밀번호일 때는 명세서 메시지를 정확히 노출
-          throw Exception(
-            message?.isNotEmpty == true ? message : '이메일 또는 비밀번호가 올바르지 않습니다.',
-          );
+          // remainingAttempts가 있으면 메시지에 포함
+          String errorMessage = message?.isNotEmpty == true
+              ? message!
+              : '이메일 또는 비밀번호가 올바르지 않습니다.';
+
+          if (remainingAttempts != null && remainingAttempts > 0) {
+            errorMessage += ' (남은 시도 횟수: $remainingAttempts)';
+          }
+
+          throw Exception(errorMessage);
         }
 
         // 기타 401 오류는 백엔드 메시지 우선, 없으면 일반 메시지

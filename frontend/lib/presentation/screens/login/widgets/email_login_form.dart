@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:frontend/app/theme/app_colors.dart';
-import 'package:frontend/services/auth_service.dart';
+import 'package:frontend/services/auth_service.dart'
+    show AuthService, AccountLockedException;
 import 'package:frontend/providers/user_provider.dart';
 import '../forgot_password_screen.dart';
 import '../signup_screen.dart';
@@ -101,6 +102,30 @@ class _EmailLoginFormState extends State<EmailLoginForm> {
         }
       } catch (e) {
         if (!mounted) return;
+
+        // AccountLockedException 처리
+        if (e is AccountLockedException) {
+          setState(() {
+            _isLoading = false;
+            _errorText = e.message;
+          });
+
+          // 비밀번호 재설정 화면으로 이동 (이메일 전달)
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ForgotPasswordScreen(),
+                settings: RouteSettings(
+                  arguments: {'email': e.email ?? _emailController.text},
+                ),
+              ),
+            );
+          });
+          return;
+        }
+
         setState(() {
           _isLoading = false;
           final errorMsg = e.toString();
@@ -109,7 +134,7 @@ class _EmailLoginFormState extends State<EmailLoginForm> {
           String userMessage;
           if (errorMsg.startsWith('Exception: ')) {
             userMessage = errorMsg.substring('Exception: '.length);
-            
+
             // 실제 네트워크 오류만 "네트워크 오류"로 변환
             if (userMessage.startsWith('네트워크 오류: ') ||
                 userMessage.contains('서버에 연결할 수 없습니다') ||
