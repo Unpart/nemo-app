@@ -13,6 +13,7 @@ class AutoLoginResult {
   final String? nickname;
   final String? profileImageUrl;
   final String? accessToken;
+  final String? provider;           // ★ 추가
 
   AutoLoginResult({
     required this.success,
@@ -20,6 +21,7 @@ class AutoLoginResult {
     this.nickname,
     this.profileImageUrl,
     this.accessToken,
+    this.provider,                  // ★ 추가
   });
 }
 
@@ -39,14 +41,25 @@ class AccountLockedException implements Exception {
   String toString() => message;
 }
 
+/// 캡챠 필요 예외 (Turnstile 인증 필요)
+class NeedCaptchaException implements Exception {
+  final String message;
+  final int? remainingAttempts;
+
+  NeedCaptchaException({required this.message, this.remainingAttempts});
+
+  @override
+  String toString() => message;
+}
+
 class AuthService {
   // ✅ 서버 URL 설정 (health 체크 기반 원격/로컬 자동 선택)
   static String? _resolvedBaseUrl;
 
   // 원격/로컬 후보 URL
   static const String _remoteBaseUrl =
-      'https://port-0-nemo-docker-springboot-prod-mdy7o3aya1eb5a01.sel5.cloudtype.app/';
-  static const String _localBaseUrlAndroid = 'http://localhost:8080/';
+      '';
+  static const String _localBaseUrlAndroid = 'http://192.168.219.106:8080/';
   static const String _localBaseUrlDefault = 'http://localhost:8080/';
 
   // 외부에서 사용하는 baseUrl (초기화 전에는 원격 기본값 사용)
@@ -59,8 +72,8 @@ class AuthService {
     // 1) 원격 서버 health 체크 시도
     try {
       final uri = Uri.parse('${_remoteBaseUrl}actuator/health');
-      // 모바일 네트워크 환경에서도 여유를 두기 위해 타임아웃을 5초로 증가
-      final res = await http.get(uri).timeout(const Duration(seconds: 5));
+      // 모바일 네트워크 환경에서도 여유를 두기 위해 타임아웃을 7초로 증가
+      final res = await http.get(uri).timeout(const Duration(seconds: 7));
 
       if (res.statusCode >= 200 && res.statusCode < 400) {
         _resolvedBaseUrl = _remoteBaseUrl;
@@ -144,6 +157,7 @@ class AuthService {
           nickname: stored.nickname,
           profileImageUrl: stored.profileImageUrl,
           refreshToken: newRefresh,
+          provider: stored.provider,           // ★ 추가
         );
       } else {
         // refreshToken 변경 없으면 기존 값 유지
@@ -156,6 +170,7 @@ class AuthService {
         nickname: stored.nickname,
         profileImageUrl: stored.profileImageUrl,
         accessToken: newAccess,
+        provider: stored.provider,   // ★ 여기 추가
       );
     } catch (_) {
       await AuthStorage.clear();
@@ -169,7 +184,11 @@ class AuthService {
   }
 
   /// 로그인 요청
-  Future<Map<String, dynamic>> login(String email, String password) async {
+  Future<Map<String, dynamic>> login(
+      String email,
+      String password, {
+        String? turnstileToken,
+      }) async {
     if (AppConstants.useMockApi) {
       // 모킹 응답
       await Future.delayed(
@@ -209,9 +228,16 @@ class AuthService {
       print('🔵 [LOGIN] useMockApi: ${AppConstants.useMockApi}');
       print('🔵 [LOGIN] 요청 URL: ${baseUrl}api/users/login');
 
+      final body = <String, dynamic>{'email': email, 'password': password};
+
+      // turnstileToken이 있으면 추가
+      if (turnstileToken != null && turnstileToken.isNotEmpty) {
+        body['turnstileToken'] = turnstileToken;
+      }
+
       final response = await ApiClient.post(
         '/api/users/login',
-        body: {'email': email, 'password': password},
+        body: body,
         includeAuth: false,
       );
 
@@ -226,6 +252,7 @@ class AuthService {
         final access = data['accessToken'] as String;
         final refresh = data['refreshToken'] as String?;
         final user = data['user'] as Map<String, dynamic>?;
+        final provider = user?['provider'] as String? ?? 'local';   // ★ 추가
 
         // Access Token과 Refresh Token 저장 + 로컬 저장
         setAccessToken(access);
@@ -241,6 +268,7 @@ class AuthService {
               nickname: nickname,
               profileImageUrl: profileImageUrl,
               refreshToken: refresh,
+              provider: provider,           // ★ 추가
             );
           }
         }
@@ -253,6 +281,7 @@ class AuthService {
           'userId': (user?['userId'] as num?)?.toInt(),
           'nickname': user?['nickname'] as String? ?? '',
           'profileImageUrl': user?['profileImageUrl'],
+          'provider': provider,   // ★ 추가
         };
       } else if (response.statusCode == 401) {
         // 백엔드 명세: { "error": "INVALID_CREDENTIALS", "message": "...", "remainingAttempts": 3, "needCaptcha": false, "needPasswordReset": false }
@@ -271,6 +300,7 @@ class AuthService {
         final message = data?['message'] as String?;
         final remainingAttempts = data?['remainingAttempts'] as int?;
         final needPasswordReset = data?['needPasswordReset'] as bool? ?? false;
+        final needCaptcha = data?['needCaptcha'] as bool? ?? false;
 
         // 계정 잠금 또는 비밀번호 재설정 필요
         if (error == 'ACCOUNT_LOCKED' || needPasswordReset == true) {
@@ -280,6 +310,20 @@ class AuthService {
                 : '비밀번호를 여러 번 틀려 계정이 잠겼습니다. 비밀번호를 재설정해주세요.',
             remainingAttempts: remainingAttempts,
             email: email, // 로그인 시도한 이메일 전달
+          );
+        }
+
+        // 캡챠 필요 또는 캡챠 검증 실패
+        if (error == 'NEED_CAPTCHA' ||
+            error == 'INVALID_CAPTCHA' ||
+            needCaptcha == true) {
+          throw NeedCaptchaException(
+            message: message?.isNotEmpty == true
+                ? message!
+                : error == 'INVALID_CAPTCHA'
+                ? '캡챠 인증에 실패했습니다. 다시 시도해주세요.'
+                : '비밀번호를 여러 번 틀렸습니다. 캡챠 인증을 완료한 후 다시 시도해주세요.',
+            remainingAttempts: remainingAttempts,
           );
         }
 
@@ -302,6 +346,30 @@ class AuthService {
           throw Exception(message);
         }
         throw Exception('인증에 실패했습니다. 다시 로그인해주세요.');
+      } else if (response.statusCode == 423) {
+        // 계정 잠금 (423 Locked)
+        final raw = response.body.isNotEmpty
+            ? utf8.decode(response.bodyBytes)
+            : '';
+        Map<String, dynamic>? data;
+        try {
+          data = raw.isNotEmpty
+              ? jsonDecode(raw) as Map<String, dynamic>
+              : null;
+        } catch (_) {
+          data = null;
+        }
+        final message = data?['message'] as String?;
+        final remainingAttempts = data?['remainingAttempts'] as int?;
+        final needPasswordReset = data?['needPasswordReset'] as bool? ?? false;
+
+        throw AccountLockedException(
+          message: message?.isNotEmpty == true
+              ? message!
+              : '비밀번호를 여러 번 틀려 계정이 잠겼습니다. 비밀번호를 재설정해주세요.',
+          remainingAttempts: remainingAttempts,
+          email: email,
+        );
       } else if (response.statusCode == 400) {
         final data = jsonDecode(response.body);
         throw Exception(data['message'] ?? '잘못된 요청입니다.');
@@ -640,6 +708,25 @@ class AuthService {
         // API 명세서: 410 Gone - 이미 탈퇴된 사용자
         final data = jsonDecode(response.body);
         throw Exception(data['message'] ?? '이미 탈퇴 처리된 사용자입니다.');
+      } else if (response.statusCode == 409) {
+        // 데이터베이스 제약 조건 위반 (CONSTRAINT_VIOLATION)
+        try {
+          final data = response.body.isNotEmpty
+              ? jsonDecode(response.body)
+              : {};
+          final message = data['message'] as String?;
+          final code = data['code'] as String?;
+
+          if (code == 'CONSTRAINT_VIOLATION' ||
+              (message != null && message.contains('중복 데이터'))) {
+            throw Exception('회원탈퇴할 수 없습니다. 연결된 데이터(사진, 앨범 등)가 있어 삭제할 수 없습니다.');
+          }
+
+          throw Exception(message ?? '회원탈퇴 중 충돌이 발생했습니다.');
+        } catch (e) {
+          if (e is Exception) rethrow;
+          throw Exception('회원탈퇴 중 충돌이 발생했습니다.');
+        }
       } else {
         throw Exception('회원탈퇴 실패 (${response.statusCode})');
       }
@@ -902,30 +989,40 @@ class AuthService {
 
     return _handleSocialResponse(response, provider: '구글');
   }
+
   /// 소셜 로그인 공통 응답 처리
   Future<Map<String, dynamic>> _handleSocialResponse(
       http.Response response, {
         required String provider,
       }) async {
     if (response.statusCode == 200) {
-      final data =
-      jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
       final access = data['accessToken'] as String?;
       final refresh = data['refreshToken'] as String?;
       final user = data['user'] as Map<String, dynamic>?;
 
+      final backendProvider = user?['provider'] as String?
+          ?? (provider == '카카오'
+              ? 'kakao'
+              : provider == '구글'
+              ? 'google'
+              : 'social');
+
       if (access == null) {
         throw Exception('$provider 로그인 실패: accessToken 누락');
       }
 
-      // 메모리에 저장
+      // 👇 newUser / isNewUser 둘 다 대응
+      final isNewUser = (data['isNewUser'] ??
+          data['newUser'] ??
+          false) as bool;
+
       setAccessToken(access);
       if (refresh != null) {
         setRefreshToken(refresh);
       }
 
-      // User 저장 로직
       final uid = user?['userId'] as int?;
       final nickname = user?['nickname'] as String?;
       final profileImageUrl = user?['profileImageUrl'] as String?;
@@ -936,6 +1033,7 @@ class AuthService {
           nickname: nickname ?? '',
           profileImageUrl: profileImageUrl,
           refreshToken: refresh,
+          provider: backendProvider,
         );
       }
 
@@ -945,14 +1043,15 @@ class AuthService {
         'userId': uid,
         'nickname': nickname,
         'profileImageUrl': profileImageUrl,
-        'isNewUser': data['isNewUser'] ?? false,
+        'isNewUser': isNewUser,   // ✅ 이제 진짜 값 들어감
+        'provider': backendProvider,
       };
     }
 
-    // 실패 처리
     final body = response.body.isNotEmpty ? response.body : '';
     throw Exception('$provider 로그인 실패: $body');
   }
+
 
   /// 소셜 로그인 (카카오/애플)
   /// API 명세서: POST /api/auth/login

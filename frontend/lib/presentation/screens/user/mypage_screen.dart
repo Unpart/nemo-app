@@ -279,9 +279,9 @@ class _MyPageScreenState extends State<MyPageScreen> {
           'userId': updatedInfo['userId'],
           'email': updatedInfo['email'] ?? _userInfo['email'],
           'nickname':
-              updatedInfo['nickname'] ?? _nicknameController.text.trim(),
+          updatedInfo['nickname'] ?? _nicknameController.text.trim(),
           'profileImageUrl':
-              updatedInfo['profileImageUrl'] ?? _userInfo['profileImageUrl'],
+          updatedInfo['profileImageUrl'] ?? _userInfo['profileImageUrl'],
           'createdAt': updatedInfo['createdAt'] ?? _userInfo['createdAt'],
         };
         _isEditing = false;
@@ -363,7 +363,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
+              (route) => false,
         );
         ScaffoldMessenger.of(
           context,
@@ -387,6 +387,10 @@ class _MyPageScreenState extends State<MyPageScreen> {
   }
 
   Future<void> _deleteAccount() async {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final String provider = userProvider.provider ?? 'local';
+    final bool isLocal = provider == 'local';
+
     // 1단계: 상세한 경고 메시지
     final showWarning = await showDialog<bool>(
       context: context,
@@ -396,7 +400,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
             textTheme: GoogleFonts.notoSansTextTheme(
               Theme.of(context).textTheme,
             ),
-            // Use default dialogTheme; apply font via textTheme above
           ),
           child: AlertDialog(
             title: const Text(
@@ -418,7 +421,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
                   ),
                   const SizedBox(height: 12),
                   _buildWarningItem('• 개인 정보 (이메일, 닉네임, 프로필 이미지)'),
-                  _buildWarningItem('• 모든 리캡 카드와 앨범'),
                   _buildWarningItem('• 업로드된 사진들'),
                   _buildWarningItem('• 친구 목록 및 관계'),
                   _buildWarningItem('• 앱 사용 기록'),
@@ -489,75 +491,75 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
     if (showWarning != true) return;
 
-    // 2단계: 비밀번호 확인
-    final passwordController = TextEditingController();
-    final passwordConfirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext dialogContext) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            textTheme: GoogleFonts.notoSansTextTheme(
-              Theme.of(context).textTheme,
+    // 2단계: 비밀번호 확인 (로컬 계정만)
+    String? passwordForDelete;
+    if (isLocal) {
+      final passwordController = TextEditingController();
+      final passwordConfirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              textTheme: GoogleFonts.notoSansTextTheme(
+                Theme.of(context).textTheme,
+              ),
             ),
-            // Use default dialogTheme
-          ),
-          child: AlertDialog(
-            title: const Text(
-              '비밀번호 확인',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  '회원탈퇴를 위해\n현재 비밀번호를 입력해주세요.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 14),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: '비밀번호',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock_outline),
+            child: AlertDialog(
+              title: const Text(
+                '비밀번호 확인',
+                style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    '회원탈퇴를 위해\n현재 비밀번호를 입력해주세요.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return '비밀번호를 입력해주세요';
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: '비밀번호',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.lock_outline),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    if (mounted) {
+                      Navigator.of(dialogContext).pop(false);
                     }
-                    return null;
                   },
+                  child: const Text('취소'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    if (passwordController.text.isNotEmpty && mounted) {
+                      Navigator.of(dialogContext).pop(true);
+                    }
+                  },
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  child: const Text('탈퇴 확인'),
                 ),
               ],
             ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  if (mounted) {
-                    Navigator.of(dialogContext).pop(false);
-                  }
-                },
-                child: const Text('취소'),
-              ),
-              TextButton(
-                onPressed: () {
-                  if (passwordController.text.isNotEmpty && mounted) {
-                    Navigator.of(dialogContext).pop(true);
-                  }
-                },
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('탈퇴 확인'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+          );
+        },
+      );
 
-    if (passwordConfirmed != true) return;
+      if (passwordConfirmed != true) return;
+      passwordForDelete = passwordController.text;
+    } else {
+      // 소셜 계정은 비밀번호 없이 진행 → 백엔드에서 provider 로 분기 처리
+      passwordForDelete = "";
+    }
 
     // 3단계: 최종 확인
     final finalConfirmed = await showDialog<bool>(
@@ -569,7 +571,6 @@ class _MyPageScreenState extends State<MyPageScreen> {
             textTheme: GoogleFonts.notoSansTextTheme(
               Theme.of(context).textTheme,
             ),
-            // Use default dialogTheme
           ),
           child: AlertDialog(
             title: const Text(
@@ -626,26 +627,24 @@ class _MyPageScreenState extends State<MyPageScreen> {
 
     try {
       final authService = AuthService();
-      await authService.deleteAccount(passwordController.text);
+      await authService.deleteAccount(passwordForDelete ?? "");
 
       if (mounted) {
         // UserProvider에서도 로그아웃 처리
-        if (mounted) {
-          final userProvider = Provider.of<UserProvider>(
-            context,
-            listen: false,
-          );
-          userProvider.logout();
-        }
+        final userProvider = Provider.of<UserProvider>(
+          context,
+          listen: false,
+        );
+        userProvider.logout();
 
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
+              (route) => false,
         );
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('회원탈퇴가 완료되었습니다. 그동안 이용해주셔서 감사했습니다.'),
+            content: Text('회원탈퇴가 완료되었습니다.\n그동안 이용해주셔서 감사합니다.'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 4),
           ),
@@ -663,10 +662,14 @@ class _MyPageScreenState extends State<MyPageScreen> {
             errorMsg.contains('INVALID_CURRENT_PASSWORD') ||
             errorMsg.contains('비밀번호')) {
           message = '비밀번호가 틀렸습니다';
+        } else if (errorMsg.contains('409') ||
+            errorMsg.contains('CONSTRAINT_VIOLATION') ||
+            errorMsg.contains('연결된 데이터') ||
+            errorMsg.contains('충돌')) {
+          message = '회원탈퇴할 수 없습니다. 연결된 데이터(사진, 앨범 등)가 있어 삭제할 수 없습니다.';
         } else if (errorMsg.contains('410') || errorMsg.contains('이미 탈퇴')) {
           message = '이미 탈퇴 처리된 사용자입니다.';
         } else {
-          // Exception: 접두사 제거
           if (errorMsg.startsWith('Exception: ')) {
             message = errorMsg.substring('Exception: '.length);
           } else {
@@ -702,119 +705,123 @@ class _MyPageScreenState extends State<MyPageScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                      24,
-                      outerVertical,
-                      24,
-                      outerVertical + 16,
+              padding: EdgeInsets.fromLTRB(
+                24,
+                outerVertical,
+                24,
+                outerVertical + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 헤더
+                  Center(
+                    child: Text(
+                      '마이페이지',
+                      style: GoogleFonts.jua(
+                        fontSize: 24,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // 헤더
-                        Center(
-                          child: Text(
-                            '마이페이지',
-                            style: GoogleFonts.jua(
-                              fontSize: 24,
-                              color: AppColors.textPrimary,
-                            ),
+                  ),
+                  SizedBox(height: gap),
+
+                  // 프로필 섹션 (분리 위젯 사용)
+                  ProfileCard(
+                    isEditing: _isEditing,
+                    nicknameController: _nicknameController,
+                    email: _userInfo['email'],
+                    nickname: _userInfo['nickname'],
+                    profileImageUrl:
+                    _userInfo['profileImageUrl'], // ✅ 여기!!
+                    selectedImage: _selectedImage,
+                    onEdit: () => setState(() => _isEditing = true),
+                    onCancel: () => setState(() {
+                      _isEditing = false;
+                      _nicknameController.text = _userInfo['nickname'];
+                      _selectedImage = null;
+                    }),
+                    onSave: _updateUserInfo,
+                    onOpenImagePicker: _showImagePickerDialog,
+                  ),
+                  SizedBox(height: gap),
+
+                  // 저장 한도/사용량 (프로필과 계정 정보 사이)
+                  FutureBuilder<StorageQuota>(
+                    future: _quotaFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return const Card(
+                          elevation: 0,
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: LinearProgressIndicator(),
                           ),
-                        ),
-                        SizedBox(height: gap),
+                        );
+                      }
+                      if (snapshot.hasError || !snapshot.hasData) {
+                        final errorMessage = snapshot.hasError
+                            ? snapshot.error.toString()
+                            : '저장 한도 정보를 불러오지 못했습니다.';
+                        final isAuthError =
+                            errorMessage.contains('인증') ||
+                                errorMessage.contains('토큰') ||
+                                errorMessage.contains('로그인') ||
+                                errorMessage.contains('401');
 
-                        // 프로필 섹션 (분리 위젯 사용)
-                        ProfileCard(
-                          isEditing: _isEditing,
-                          nicknameController: _nicknameController,
-                          email: _userInfo['email'],
-                          nickname: _userInfo['nickname'],
-                          profileImageUrl:
-                              _userInfo['profileImageUrl'], // ✅ 여기!!
-                          selectedImage: _selectedImage,
-                          onEdit: () => setState(() => _isEditing = true),
-                          onCancel: () => setState(() {
-                            _isEditing = false;
-                            _nicknameController.text = _userInfo['nickname'];
-                            _selectedImage = null;
-                          }),
-                          onSave: _updateUserInfo,
-                          onOpenImagePicker: _showImagePickerDialog,
-                        ),
-                        SizedBox(height: gap),
-
-                        // 저장 한도/사용량 (프로필과 계정 정보 사이)
-                        FutureBuilder<StorageQuota>(
-                          future: _quotaFuture,
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return const Card(
-                                elevation: 0,
-                                child: Padding(
-                                  padding: EdgeInsets.all(16),
-                                  child: LinearProgressIndicator(),
-                                ),
-                              );
-                            }
-                            if (snapshot.hasError || !snapshot.hasData) {
-                              final errorMessage = snapshot.hasError
-                                  ? snapshot.error.toString()
-                                  : '저장 한도 정보를 불러오지 못했습니다.';
-                              final isAuthError = errorMessage.contains('인증') ||
-                                  errorMessage.contains('토큰') ||
-                                  errorMessage.contains('로그인') ||
-                                  errorMessage.contains('401');
-                              
-                              return Card(
-                                elevation: 0,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            isAuthError
-                                                ? Icons.error_outline
-                                                : Icons.info_outline,
-                                            color: isAuthError
-                                                ? Colors.orange
-                                                : AppColors.textSecondary,
-                                      ),
-                                      const SizedBox(width: 8),
-                                          Expanded(
-                                        child: Text(
-                                              isAuthError
-                                                  ? '인증이 만료되었습니다. 다시 로그인해주세요.'
-                                                  : '저장 한도 정보를 불러오지 못했습니다.',
-                                          style: TextStyle(
-                                                color: isAuthError
-                                                    ? Colors.orange
-                                                    : AppColors.textSecondary,
-                                          ),
+                        return Card(
+                          elevation: 0,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isAuthError
+                                          ? Icons.error_outline
+                                          : Icons.info_outline,
+                                      color: isAuthError
+                                          ? Colors.orange
+                                          : AppColors.textSecondary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        isAuthError
+                                            ? '인증이 만료되었습니다. 다시 로그인해주세요.'
+                                            : '저장 한도 정보를 불러오지 못했습니다.',
+                                        style: TextStyle(
+                                          color: isAuthError
+                                              ? Colors.orange
+                                              : AppColors.textSecondary,
                                         ),
                                       ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.end,
-                                        children: [
-                                          if (isAuthError)
-                                            TextButton(
-                                              onPressed: () {
-                                                Navigator.pushReplacement(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) => const LoginScreen(),
-                                                  ),
-                                                );
-                                              },
-                                              child: const Text('로그인하기'),
-                                            )
-                                          else
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  mainAxisAlignment:
+                                  MainAxisAlignment.end,
+                                  children: [
+                                    if (isAuthError)
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.pushReplacement(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                              const LoginScreen(),
+                                            ),
+                                          );
+                                        },
+                                        child: const Text('로그인하기'),
+                                      )
+                                    else
                                       TextButton(
                                         onPressed: () {
                                           setState(() {
@@ -823,80 +830,74 @@ class _MyPageScreenState extends State<MyPageScreen> {
                                           });
                                         },
                                         child: const Text('다시 시도'),
-                                            ),
-                                        ],
                                       ),
-                                    ],
-                                  ),
+                                  ],
                                 ),
-                              );
-                            }
-                            final quota = snapshot.data!;
-                            return StorageQuotaCard(
-                              quota: quota,
-                              onUpgrade: () {
-                                // 업그레이드 플로우 진입 (추후 결제/구독 화면 연결)
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('업그레이드 준비 중입니다.'),
-                                  ),
-                                );
-                              },
-                              capFreeAtTwenty: true,
-                            );
-                          },
-                        ),
-                        SizedBox(height: gap),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      final quota = snapshot.data!;
+                      return StorageQuotaCard(
+                        quota: quota,
+                        onUpgrade: () {
+                          // 업그레이드 플로우 진입 (추후 결제/구독 화면 연결)
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('업그레이드 준비 중입니다.'),
+                            ),
+                          );
+                        },
+                        capFreeAtTwenty: true,
+                      );
+                    },
+                  ),
+                  SizedBox(height: gap),
 
-                        // 계정 정보
-                        GlassCard(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                '계정 정보',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                              SizedBox(height: isSmallHeight ? 10 : 16),
-                              InfoRow(
-                                label: '가입일',
-                                value: _formatJoinedAt(_userInfo['createdAt']),
-                                icon: Icons.calendar_today,
-                              ),
-                              SizedBox(height: innerGap),
-                              InfoRow(
-                                label: '이메일',
-                                value: _userInfo['email'],
-                                icon: Icons.email,
-                              ),
-                              SizedBox(height: innerGap),
-                              _FriendsEntryRow(),
-                            ],
+                  // 계정 정보
+                  GlassCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '계정 정보',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
                           ),
                         ),
-                        SizedBox(height: gap),
-
-                        // 계정 관리
-                        AccountActionsCard(
-                          onLogout: _logout,
-                          onDelete: _deleteAccount,
-                          onResetPassword: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const ChangePasswordScreen(),
-                              ),
-                            );
-                          },
+                        SizedBox(height: isSmallHeight ? 10 : 16),
+                        InfoRow(
+                          label: '가입일',
+                          value: _formatJoinedAt(_userInfo['createdAt']),
+                          icon: Icons.calendar_today,
                         ),
-                        SizedBox(height: gap),
+                        SizedBox(height: innerGap),
+                        _FriendsEntryRow(),
                       ],
                     ),
                   ),
+                  SizedBox(height: gap),
+
+                  // 계정 관리
+                  AccountActionsCard(
+                    onLogout: _logout,
+                    onDelete: _deleteAccount,
+                    onResetPassword: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const ChangePasswordScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  SizedBox(height: gap),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -911,6 +912,7 @@ class _FriendsEntryRow extends StatefulWidget {
 
 class _FriendsEntryRowState extends State<_FriendsEntryRow> {
   int? _friendCount;
+  int _pendingRequestCount = 0;
   bool _loading = false;
 
   @override
@@ -923,9 +925,11 @@ class _FriendsEntryRowState extends State<_FriendsEntryRow> {
     setState(() => _loading = true);
     try {
       final list = await FriendApi.getFriends();
+      final requests = await FriendApi.getPendingRequests();
       if (!mounted) return;
       setState(() {
         _friendCount = list.length;
+        _pendingRequestCount = requests.length;
         _loading = false;
       });
     } catch (_) {
@@ -943,10 +947,14 @@ class _FriendsEntryRowState extends State<_FriendsEntryRow> {
         : '친구 ${_friendCount}명';
 
     return InkWell(
-      onTap: () {
-        Navigator.of(
+      onTap: () async {
+        await Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (_) => const FriendsListScreen()));
+        // 친구 목록 화면에서 돌아올 때 갱신
+        if (mounted) {
+          _fetchCount();
+        }
       },
       child: Row(
         children: [
@@ -960,12 +968,37 @@ class _FriendsEntryRowState extends State<_FriendsEntryRow> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '친구',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
+                Row(
+                  children: [
+                    const Text(
+                      '친구',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    if (_pendingRequestCount > 0) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '요청 ${_pendingRequestCount}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 Text(
                   countText,
